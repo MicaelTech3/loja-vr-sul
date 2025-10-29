@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lv — Compre com PIX</title>
+  <meta name="description" content="Loja Lv: escolha produtos, adicione ao carrinho e pague via PIX (simulado)."/>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-wrap">
+
+
+      <a class="brand" href="#">
+  <div class="logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M7 21h10a2 2 0 0 0 2-2V8H5v11a2 2 0 0 0 2 2zm10-13 1-3H6l1 3h10z"/></svg>
+  </div>
+
+  <!-- curto (mobile) e completo (desktop) -->
+  <span class="brand-title">
+    <span class="brand-short">Lv</span>
+    <span class="brand-full">Loja Virtual</span>
+  </span>
+</a>
+
+
+      <div class="search" id="searchWrap">
+        <input id="searchInput" placeholder="Buscar roupas, tênis, camisas..." autocomplete="off" />
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M10 18a8 8 0 1 1 6.32-3.1l4.39 4.39-1.41 1.41-4.39-4.39A7.96 7.96 0 0 1 10 18z"/></svg>
+      </div>
+
+      <button id="cartOpenBtn" class="cart-btn" aria-label="Abrir carrinho">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M7 4h-2l-1 2h2l3.6 7.59-1.35 2.44a1.99 1.99 0 0 0 .25 2.18c.37.46.92.74 1.5.79H19v-2h-8.42c-.14 0-.25-.11-.26-.25l.03-.12.9-1.63H17a2 2 0 0 0 1.8-1.1l3.58-7.16L20.42 4H7zm-1 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+        <span class="cart-label">Carrinho</span>
+        <span id="cartBadge" class="badge">0</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="cats" id="cats" role="tablist" aria-label="Categorias"></div>
+
+    <section class="hero">
+      <h2>Mega Ofertas de Hoje</h2>
+      <p>Frete grátis acima de R$ 199 • Pague no PIX e em cartão. Aproveite!</p>
+    </section>
+
+    <section>
+      <div id="grid" class="grid" aria-live="polite"></div>
+    </section>
+  </div>
+
+  <!-- Carrinho -->
+  <aside id="cartDrawer" class="drawer" aria-hidden="true">
+    <header>
+      <strong>Seu carrinho</strong>
+      <button id="cartCloseBtn" class="close-x" aria-label="Fechar carrinho">Fechar</button>
+    </header>
+    <main id="cartLines"></main>
+    <footer>
+      <div class="summary">
+        <div>Itens: <strong id="sumItems">0</strong></div>
+        <div>Subtotal: <strong id="sumSubtotal">R$ 0,00</strong></div>
+        <div>Descontos: <strong id="sumDiscounts">-</strong></div>
+        <div>Total: <strong id="sumTotal">R$ 0,00</strong></div>
+      </div>
+      <button id="checkoutBtn" class="btn primary" style="width:100%">Finalizar compra</button>
+    </footer>
+  </aside>
+
+  <!-- Checkout -->
+  <div id="checkoutModal" class="modal" aria-hidden="true">
+    <div class="sheet">
+      <header>
+        <strong>Checkout</strong>
+        <button class="close-x" id="closeCheckout" aria-label="Fechar checkout">Fechar</button>
+      </header>
+      <main>
+        <div class="checkout-grid">
+          <div class="left">
+            <div class="field"><label>CEP</label><input id="cep" placeholder="00000-000"></div>
+            <div class="field"><label>Endereço</label><input id="address"></div>
+            <div class="field" style="display:flex; gap:8px;">
+              <div style="flex:1"><label>Cidade</label><input id="city"></div>
+              <div style="width:80px"><label>UF</label><input id="uf" maxlength="2"></div>
+            </div>
+
+            <div class="field"><label>Forma de Pagamento</label>
+              <div class="pay-opt">
+                <div class="radio active" data-method="pix"><input type="radio" name="pay" checked> PIX</div>
+                <div class="radio" data-method="card"><input type="radio" name="pay"> Cartão</div>
+              </div>
+            </div>
+
+            <div id="pixSection" class="pix-box" aria-hidden="false">
+              <div><strong>Pague com PIX</strong></div>
+              <div class="qrcode" id="qrcode" role="img" aria-label="QR Code PIX (simulado)"></div>
+              <div class="copy">
+                <input id="pixCopy" readonly aria-label="Chave PIX">
+                <button id="copyBtn" class="btn">Copiar</button>
+              </div>
+              <button id="paidBtn" class="btn primary">Já paguei</button>
+              <button id="cancelPix" class="btn">Cancelar</button>
+            </div>
+          </div>
+
+          <div class="right">
+            <div class="pix-box">
+              <strong>Resumo do Pedido</strong>
+              <div id="resumeList" class="resumeList"></div>
+              <div class="summary">
+                <div>Subtotal: <strong id="resumeSubtotal">R$ 0,00</strong></div>
+                <div>Descontos: <strong id="resumeDiscounts">-</strong></div>
+                <div>Total: <strong id="resumeTotal">R$ 0,00</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Lightbox / Product Gallery Modal -->
+  <div id="lightboxModal" class="lightbox" aria-hidden="true">
+    <div class="lightbox-sheet" role="dialog" aria-modal="true" aria-label="Galeria de imagens do produto">
+      <button id="lbClose" class="lb-close" aria-label="Fechar galeria">✕</button>
+      <div class="lb-content">
+        <div id="lbThumbs" class="lb-thumbs" tabindex="0">
+          <!-- slides (rendered via JS) -->
+        </div>
+        <div class="lb-indicator" id="lbIndicator"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
