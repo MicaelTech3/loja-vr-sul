@@ -19,10 +19,13 @@ button{font:inherit}
 
 /* Topbar */
 .topbar{position:sticky; top:0; z-index:50; backdrop-filter: blur(10px); background:linear-gradient(180deg, rgba(11,18,32,.85), rgba(11,18,32,.55)); border-bottom:1px solid rgba(255,255,255,.08)}
-.topbar-wrap{display:flex; align-items:center; gap:16px; padding:14px 0}
+.topbar-wrap{display:flex; align-items:center; gap:16px; padding:14px 0; position:relative}
 .brand{display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:.2px}
 .brand .logo{display:grid; place-items:center; width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg,var(--primary),var(--primary-2)); box-shadow:0 8px 24px rgba(124,58,237,.35)}
 .brand-title{font-size:20px}
+.brand-short { display: none; }   /* mobile short hidden by default */
+.brand-full  { display: inline; } /* desktop full shown by default */
+
 .search{flex:1; position:relative; transition:all .22s ease; display:flex; align-items:center}
 .search input{width:100%; background:var(--glass); border:1px solid rgba(255,255,255,.1); color:var(--txt); padding:12px 44px 12px 14px; border-radius:12px; outline:none}
 .search input:focus{box-shadow:var(--ring); border-color:rgba(124,58,237,.45)}
@@ -107,80 +110,48 @@ button{font:inherit}
 .toast.show{display:block}
 
 /* Lightbox / gallery */
-.lightbox{
-  position:fixed; inset:0; display:none; align-items:center; justify-content:center;
-  background: rgba(6,8,12,0.55); z-index:9999; backdrop-filter: blur(4px);
-}
+.lightbox{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background: rgba(6,8,12,0.55); z-index:9999; backdrop-filter: blur(4px); }
 .lightbox.open{ display:flex; }
 
 .lightbox-sheet{ width:min(920px,96vw); max-width:1200px; height:min(680px,88vh); background: linear-gradient(180deg, rgba(12,14,20,0.95), rgba(12,14,20,0.98)); border-radius:14px; padding:18px; position:relative; box-shadow:0 30px 80px rgba(2,6,23,.7); display:flex; flex-direction:column; gap:12px; overflow:hidden; }
-
-/* close X */
 .lb-close{ position:absolute; right:12px; top:12px; z-index:3; border:none; background:transparent; color:var(--danger); font-size:20px; width:36px; height:36px; display:grid; place-items:center; cursor:pointer; border-radius:8px; }
-
-/* slides container (horizontal scroll with snap) */
-.lb-thumbs{
-  height: calc(100% - 28px);
-  display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory;
-  -webkit-overflow-scrolling:touch; padding-bottom:6px;
-  align-items:center;
-}
+.lb-thumbs{ height: calc(100% - 28px); display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; padding-bottom:6px; align-items:center; }
 .lb-thumbs::-webkit-scrollbar{ height:10px }
 .lb-thumbs::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.12); border-radius:8px }
-
-/* cada slide: largura fixa relativa e altura consistente */
-.lb-slide{
-  min-width:80%;
-  max-width:80%;
-  height:100%;
-  flex:0 0 80%;
-  background:#0b0b0b;
-  border-radius:12px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  scroll-snap-align:center;
-  position:relative;
-  overflow:hidden;
-  user-select:none;
-}
+.lb-slide{ min-width:80%; max-width:80%; height:100%; flex:0 0 80%; background:#0b0b0b; border-radius:12px; display:flex; align-items:center; justify-content:center; scroll-snap-align:center; position:relative; overflow:hidden; user-select:none; }
 @media (max-width:900px){ .lb-slide{min-width:90%; max-width:90%} }
-
-/* garantir que a imagem sempre preencha o slide (sem distorcer) */
 .lb-slide img{ width:100%; height:100%; object-fit:cover; object-position:center; display:block; }
-
-/* indicators */
 .lb-indicator{ display:flex; gap:8px; justify-content:center; align-items:center; height:28px; position:relative; }
 .lb-dot{ width:8px; height:8px; border-radius:999px; background:rgba(255,255,255,.18); transition:transform .18s, background .18s; }
 .lb-dot.active{ background:var(--primary); transform:scale(1.15); }
-
-/* white counter */
 .lb-counter{ background:#fff; color:#111; padding:4px 8px; border-radius:999px; font-weight:700; font-size:13px; margin-left:8px; min-width:54px; text-align:center; }
-
-/* Desejo slide (hidden if leftover) */
 .lb-slide.lb-desejo{ display:none !important; }
 .lb-desejo #lbWishListPanel{ background: rgba(255,255,255,0.02); padding:10px; border-radius:8px; }
 
 /* heart wished style */
 [data-act="fav"].wished{ color: var(--primary-2); transform:scale(1.06); }
 
-/* ===== MOBILE / SEARCH EXPAND + CHECKOUT FULLSCREEN ===== */
+/* MOBILE / SEARCH EXPAND + CHECKOUT FULLSCREEN */
 .search.expanded {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 10px;
   z-index: 60;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   padding: 8px 12px;
   border-radius: 12px;
   box-shadow: 0 8px 30px rgba(2,6,23,.6);
 }
 .search.expanded input{ padding:12px 44px 12px 14px; font-size:16px; }
+
 @media (max-width: 600px) {
-  .topbar-wrap{ gap:10px; padding:10px 8px; }
+  .brand-short { display: inline; font-weight:800; }  /* mostrar Lv no mobile */
+  .brand-full  { display: none; }                     /* esconder Loja Virtual no mobile */
+
+  .topbar-wrap{ gap:10px; padding:10px 8px; align-items:center; }
   .brand-title{ font-size:18px; }
+
   .search input{ padding:10px 40px 10px 12px; font-size:15px; }
+
+  body.search-open .cart-btn { display: none !important; } /* esconde carrinho quando busca ativa */
 
   .modal.open .sheet { width:100vw !important; height:100vh !important; border-radius:0 !important; margin:0; display:flex; flex-direction:column; }
   .checkout-grid{ display:block; padding:14px; }
@@ -191,35 +162,4 @@ button{font:inherit}
   .copy input{ font-size:14px; padding:12px; }
   .btn.primary{ padding:12px 16px; font-size:16px; border-radius:12px; }
   #paidBtn, #checkoutBtn, #copyBtn { width:100%; padding:12px 14px; font-size:16px; }
-}
-
-
-/* --- Topbar: mostra "Lv" apenas no mobile, "Loja Virtual" no desktop --- */
-.brand-short { display: none; }   /* default: esconder short */
-.brand-full  { display: inline; } /* default: mostrar full */
-
-@media (max-width: 600px) {
-  .brand-short { display: inline; font-weight:800; }  /* mostrar Lv no mobile */
-  .brand-full  { display: none; }                     /* esconder Loja Virtual */
-}
-
-/* garante que podemos posicionar a busca relativamente ao topbar */
-.topbar-wrap { position: relative; }
-
-/* quando a busca recebe .expanded em mobile, 
-   ela fica posicionada ao lado do logo (espaço reservado) */
-@media (max-width: 600px) {
-  /* ajusta onde a busca expandida fica (à direita do logo) */
-  .search.expanded {
-    left: 56px;    /* desloca a busca para começar logo após o logo */
-    right: 12px;
-    top: 10px;
-    z-index: 60;
-  }
-
-  /* quando a busca estiver ativa, escondemos o botão do carrinho */
-  body.search-open .cart-btn { display: none !important; }
-
-  /* e melhoramos a largura do input quando expandido ao lado do logo */
-  .search.expanded input { padding-left: 12px; padding-right: 44px; }
 }

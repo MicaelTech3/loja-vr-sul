@@ -3,27 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Lv — Compre com PIX</title>
-  <meta name="description" content="Loja Lv: escolha produtos, adicione ao carrinho e pague via PIX (simulado)."/>
+  <title>Loja Virtual — Compre com PIX</title>
+  <meta name="description" content="Loja Virtual: escolha produtos, adicione ao carrinho e pague via PIX (simulado)."/>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
     <div class="container topbar-wrap">
-
-
       <a class="brand" href="#">
-  <div class="logo">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M7 21h10a2 2 0 0 0 2-2V8H5v11a2 2 0 0 0 2 2zm10-13 1-3H6l1 3h10z"/></svg>
-  </div>
+        <div class="logo" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M7 21h10a2 2 0 0 0 2-2V8H5v11a2 2 0 0 0 2 2zm10-13 1-3H6l1 3h10z"/></svg>
+        </div>
 
-  <!-- curto (mobile) e completo (desktop) -->
-  <span class="brand-title">
-    <span class="brand-short">Lv</span>
-    <span class="brand-full">Loja Virtual</span>
-  </span>
-</a>
-
+        <!-- curto (mobile) e completo (desktop) -->
+        <span class="brand-title">
+          <span class="brand-short">Lv</span>
+          <span class="brand-full">Loja Virtual</span>
+        </span>
+      </a>
 
       <div class="search" id="searchWrap">
         <input id="searchInput" placeholder="Buscar roupas, tênis, camisas..." autocomplete="off" />
@@ -43,7 +40,7 @@
 
     <section class="hero">
       <h2>Mega Ofertas de Hoje</h2>
-      <p>Frete grátis acima de R$ 199 • Pague no PIX e em cartão. Aproveite!</p>
+      <p>Frete grátis acima de R$ 199 • Pague no PIX com 10% OFF usando o cupom <strong>BEMVINDO</strong></p>
     </section>
 
     <section>
@@ -128,9 +125,7 @@
     <div class="lightbox-sheet" role="dialog" aria-modal="true" aria-label="Galeria de imagens do produto">
       <button id="lbClose" class="lb-close" aria-label="Fechar galeria">✕</button>
       <div class="lb-content">
-        <div id="lbThumbs" class="lb-thumbs" tabindex="0">
-          <!-- slides (rendered via JS) -->
-        </div>
+        <div id="lbThumbs" class="lb-thumbs" tabindex="0"></div>
         <div class="lb-indicator" id="lbIndicator"></div>
       </div>
     </div>
