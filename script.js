@@ -92,6 +92,143 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  /* ===== Detecta retorno do MercadoPago e mostra aviso "Compra concluída" ===== */
+(function handleMpRedirect(){
+  const params = new URLSearchParams(window.location.search);
+  const mp = params.get('mp_result');
+  if(!mp) return;
+  if(mp === 'success') {
+    // mostra aviso visual
+    toast('Compra concluída ✅');
+    // cria botão flutuante "Minhas compras" se não existir
+    ensureFloatingOrdersButton();
+    // opcional: scroll para o botão para usuário ver
+    setTimeout(()=> {
+      const b = document.querySelector('#floatingOrdersBtn');
+      if(b) b.classList.add('pulse');
+    }, 600);
+  } else if(mp === 'failure') {
+    toast('Pagamento não confirmado (falha).');
+  } else if(mp === 'pending') {
+    toast('Pagamento pendente.');
+  }
+})();
+
+/* ===== Floating button "Minhas compras" e painel com chat (cliente) ===== */
+function ensureFloatingOrdersButton(){
+  if(document.querySelector('#floatingOrdersBtn')) return;
+  // botão flutuante
+  const btn = document.createElement('button');
+  btn.id = 'floatingOrdersBtn';
+  btn.textContent = 'Minhas compras';
+  btn.style.position = 'fixed';
+  btn.style.right = '18px';
+  btn.style.bottom = '18px';
+  btn.style.zIndex = 99999;
+  btn.style.padding = '12px 16px';
+  btn.style.borderRadius = '999px';
+  btn.style.background = 'linear-gradient(90deg,#7c3aed,#3b82f6)';
+  btn.style.color = '#fff';
+  btn.style.border = 'none';
+  btn.style.boxShadow = '0 6px 18px rgba(0,0,0,.3)';
+  btn.style.cursor = 'pointer';
+  btn.addEventListener('click', openOrdersPanelFloating);
+  document.body.appendChild(btn);
+}
+
+/* cria painel lateral simples com lista de pedidos e area de chat */
+let floatingOrdersPanel = null;
+function openOrdersPanelFloating(){
+  if(floatingOrdersPanel){
+    floatingOrdersPanel.style.display = 'block';
+    return;
+  }
+  const panel = document.createElement('div');
+  panel.id = 'floatingOrdersPanel';
+  panel.style.position = 'fixed';
+  panel.style.right = '18px';
+  panel.style.bottom = '72px';
+  panel.style.width = '360px';
+  panel.style.maxHeight = '70vh';
+  panel.style.overflow = 'auto';
+  panel.style.background = 'var(--card)';
+  panel.style.border = '1px solid rgba(255,255,255,.08)';
+  panel.style.borderRadius = '12px';
+  panel.style.padding = '12px';
+  panel.style.zIndex = 99998;
+  panel.style.boxShadow = '0 10px 40px rgba(0,0,0,.4)';
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <strong>Minhas compras</strong>
+      <button id="closeFloatingOrders" style="background:transparent;border:none;color:var(--txt)">✕</button>
+    </div>
+    <div id="floatingOrdersList" style="margin-bottom:8px">Carregando...</div>
+    <hr style="opacity:.06;margin:8px 0" />
+    <div>
+      <strong>Chat com a loja</strong>
+      <div id="floatingChat" style="margin-top:8px; font-size:13px; color:var(--txt-dim)">
+        Use esse campo para enviar mensagens rápidas (simulação).
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="floatingChatInput" placeholder="Digite mensagem..." style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.06);background:var(--glass);color:var(--txt)"/>
+        <button id="floatingChatSend" class="btn">Enviar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(panel);
+  floatingOrdersPanel = panel;
+  document.querySelector('#closeFloatingOrders').addEventListener('click', ()=> panel.style.display='none');
+  document.querySelector('#floatingChatSend').addEventListener('click', async ()=>{
+    const txt = document.querySelector('#floatingChatInput').value.trim();
+    if(!txt) return toast('Escreva uma mensagem.');
+    // salva no Firestore (se quiser) ou apenas mostra (aqui só mock)
+    const chatDiv = document.querySelector('#floatingChat');
+    const elMsg = document.createElement('div');
+    elMsg.textContent = `Você: ${txt}`;
+    elMsg.style.marginTop = '6px';
+    elMsg.style.padding = '6px';
+    elMsg.style.borderRadius = '8px';
+    elMsg.style.background = 'rgba(255,255,255,.03)';
+    chatDiv.appendChild(elMsg);
+    document.querySelector('#floatingChatInput').value = '';
+    // opcional: enviar para endpoint admin/chat (não implementado aqui)
+    toast('Mensagem enviada (simulada).');
+  });
+
+  // carrega pedidos do Firestore (se possível)
+  loadUserOrdersIntoFloating();
+}
+
+async function loadUserOrdersIntoFloating(){
+  const listEl = document.querySelector('#floatingOrdersList');
+  if(!listEl) return;
+  listEl.innerHTML = 'Carregando pedidos...';
+  if(!window.firebase || !firebase.auth || !firebase.firestore){
+    listEl.innerHTML = '<div style="opacity:.7">Login/firestore não disponível.</div>';
+    return;
+  }
+  const user = firebase.auth().currentUser;
+  if(!user) { listEl.innerHTML = '<div style="opacity:.7">Você não está autenticado.</div>'; return; }
+  try {
+    const snap = await firebase.firestore().collection('pedidos')
+      .where('userId','==',user.uid).orderBy('criadoEm','desc').get();
+    if(snap.empty) { listEl.innerHTML = '<div style="opacity:.7">Nenhum pedido encontrado.</div>'; return; }
+    const html = snap.docs.map(d=>{
+      const p = d.data();
+      return `<div style="padding:8px;border-radius:8px;margin-bottom:6px;background:rgba(255,255,255,.02)">
+        <div style="font-weight:700">${p.descricao || 'Pedido'}</div>
+        <div style="font-size:13px;color:var(--txt-dim)">Valor: ${p.total ? new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(p.total) : '-' } — Status: <strong>${p.status}</strong></div>
+        <div style="margin-top:6px;font-size:12px;color:var(--txt-dim)">ID: ${d.id}</div>
+      </div>`;
+    }).join('');
+    listEl.innerHTML = html;
+  } catch(e){
+    console.error('Erro carregando pedidos', e);
+    listEl.innerHTML = '<div style="opacity:.7">Erro ao carregar pedidos.</div>';
+  }
+}
+
   // ======== Categories ========
   const catsWrap = el('#cats');
   let activeCat = 'Tudo';

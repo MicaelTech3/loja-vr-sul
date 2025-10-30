@@ -1,70 +1,108 @@
-// api/webhook.js
-const crypto = require('crypto');
-const fs = require('fs');
+/**
+ * Webhook Mercado Pago + Firestore + Telegram
+ * Ambiente: Node.js Serverless (Vercel)
+ */
 
-const WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET || "";
+const axios = require("axios");
+const admin = require("firebase-admin");
 
-function computeHmacSha256(secret, payload) {
-  return crypto.createHmac('sha256', String(secret)).update(payload, 'utf8').digest('hex');
+// --- Inicializa Firebase Admin ---
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+  });
 }
+const db = admin.firestore();
 
 module.exports = async (req, res) => {
   try {
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    // 🔹 Recebe corpo da requisição (Webhook)
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    console.log("Webhook recebido:", body);
 
-    // get raw body
-    let raw = '';
-    if (req.rawBody) {
-      raw = (typeof req.rawBody === 'string') ? req.rawBody : req.rawBody.toString('utf8');
-    } else if (req.body && typeof req.body === 'object' && Object.keys(req.body).length) {
-      raw = JSON.stringify(req.body);
-    } else {
-      raw = await new Promise((resolve, reject) => {
-        let data = [];
-        req.on('data', chunk => data.push(chunk));
-        req.on('end', () => resolve(Buffer.concat(data).toString('utf8')));
-        req.on('error', err => reject(err));
+    // 🔹 Extrai dados principais
+    const action = body.action || body.type || "";
+    let paymentId = null;
+
+    if (body.data && body.data.id) paymentId = body.data.id;
+    if (body.id && !paymentId) paymentId = body.id;
+
+    // 🔹 Filtra apenas pagamentos
+    if (!action.includes("payment") && body.topic !== "payment") {
+      return res.status(200).send("Ignorado (não é pagamento)");
+    }
+
+    // 🔹 Busca detalhes do pagamento via API Mercado Pago
+    const MP_ACCESS = process.env.MP_ACCESS_TOKEN;
+    if (!MP_ACCESS) {
+      console.error("❌ MP_ACCESS_TOKEN não configurado no ambiente!");
+      return res.status(500).send("Erro interno: falta Access Token");
+    }
+
+    let paymentData = null;
+    try {
+      const r = await axios.get(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: { Authorization: `Bearer ${MP_ACCESS}` },
+      });
+      paymentData = r.data;
+    } catch (e) {
+      console.error("Erro ao buscar detalhes do pagamento:", e.response?.data || e.message);
+    }
+
+    // 🔹 Extrai status e infos
+    const status = paymentData?.status || "unknown";
+    const payerEmail = paymentData?.payer?.email || "-";
+    const payerName = paymentData?.payer?.first_name || "";
+    const payerPhone = paymentData?.payer?.phone?.number || "-";
+    const transactionAmount = paymentData?.transaction_amount || 0;
+    const description = paymentData?.description || "Pedido";
+    const orderRef = paymentData?.external_reference || paymentId;
+
+    console.log(`Status recebido: ${status} | Pedido: ${orderRef}`);
+
+    // 🔹 Atualiza no Firestore (se pedido existir)
+    if (orderRef) {
+      const orderRefDoc = db.collection("pedidos").doc(orderRef);
+      await orderRefDoc.set(
+        {
+          status,
+          pagoEm: admin.firestore.FieldValue.serverTimestamp(),
+          valor: transactionAmount,
+          email: payerEmail,
+          telefone: payerPhone,
+        },
+        { merge: true }
+      );
+    }
+
+    // 🔹 Envia notificação para Telegram (opcional)
+    const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+    const TG_CHAT = process.env.TELEGRAM_CHAT_ID;
+
+    if (TG_TOKEN && TG_CHAT && (status === "approved" || status === "paid")) {
+      const msg = `
+✅ *Nova compra aprovada!*
+
+🧾 Pedido: ${orderRef}
+📦 Produto: ${description}
+💰 Valor: R$ ${transactionAmount}
+👤 Cliente: ${payerName} (${payerEmail})
+📞 Telefone: ${payerPhone}
+
+Ver mais em: https://loja-vr-sul.vercel.app/admin/vendas
+`;
+
+      await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+        chat_id: TG_CHAT,
+        text: msg,
+        parse_mode: "Markdown",
       });
     }
 
-    // optional signature verification
-    let verified = false;
-    let signatureHeader = req.headers['x-hook-signature'] || req.headers['x-hub-signature'] || req.headers['x-hub-signature-256'] || req.headers['x-signature'] || req.headers['x-mercadopago-signature'];
-    if (WEBHOOK_SECRET) {
-      if (!signatureHeader) {
-        console.warn('Webhook secret configured but no signature header received.');
-      } else {
-        // compute hmac and compare (accept hex)
-        const computed = computeHmacSha256(WEBHOOK_SECRET, raw);
-        const incoming = String(signatureHeader).replace(/^(sha256=|sha1=)/i, '').trim();
-        if (computed === incoming) verified = true;
-        else console.warn('Webhook signature mismatch. incoming:', incoming, 'computed:', computed);
-      }
-    } else {
-      verified = true; // no secret => accept (debug mode)
-    }
-
-    const log = {
-      ts: new Date().toISOString(),
-      headers: req.headers,
-      verified,
-      rawBodyPreview: raw.slice(0, 4000),
-    };
-    console.log('WEBHOOK DEBUG:', JSON.stringify(log, null, 2));
-    try { fs.writeFileSync('/tmp/webhook_debug.json', JSON.stringify(log, null, 2)); } catch(e){}
-
-    if (!verified) {
-      return res.status(401).json({ ok: false, error: 'Not Authorized - invalid signature' });
-    }
-
-    // aqui você pode processar o evento (ex: atualizar Firestore, etc)
-    // Exemplo simples:
-    // const payload = JSON.parse(raw);
-    // if(payload.action === 'payment.updated') { ... }
-
-    return res.status(200).json({ ok: true });
+    // 🔹 Retorna sucesso
+    res.status(200).send("OK");
   } catch (err) {
-    console.error('webhook debug error', err);
-    return res.status(500).json({ ok: false, error: String(err) });
+    console.error("Erro no webhook:", err);
+    res.status(500).send("Erro interno no webhook");
   }
 };
