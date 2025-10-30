@@ -92,7 +92,7 @@ module.exports = async (req, res) => {
 Ver mais em: https://loja-vr-sul.vercel.app/admin/vendas
 `;
 
-      await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      await axios.post(`https://api.telegram.org/bot7990320290:AAHltqfWhAnulHK5sqFxVMkhbT-bPtZPTyE/deleteWebhook`, {
         chat_id: TG_CHAT,
         text: msg,
         parse_mode: "Markdown",
