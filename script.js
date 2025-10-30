@@ -230,6 +230,73 @@ document.addEventListener("DOMContentLoaded", () => {
     currentGallery = null;
   }
 
+  // --- Lightbox hint + close-on-outside-click ---
+// (cole esse bloco ao lado das outras funções do lightbox)
+
+function createLbHint() {
+  const hint = document.createElement('div');
+  hint.className = 'lb-hint';
+  hint.id = 'lbHint';
+  hint.textContent = 'Aperte em qualquer lugar para sair';
+  return hint;
+}
+
+(function setupLightboxHintAndOutsideClick(){
+  const modal = getLbModal();
+  if(!modal) return;
+
+  // quando abrir lightbox (observe mutation ou use openLightbox para inserir hint)
+  // vamos interceptar a abertura colocando um observer simples:
+  const observer = new MutationObserver((mut) => {
+    for (const m of mut) {
+      if (m.type === 'attributes' && m.attributeName === 'class') {
+        const isOpen = modal.classList.contains('open');
+        const existing = document.getElementById('lbHint');
+
+        if (isOpen && !existing) {
+          // cria e anexa hint
+          const hint = createLbHint();
+          const content = getLbModal().querySelector('.lb-content') || getLbModal();
+          if (content) content.appendChild(hint);
+
+          // remove automaticamente depois de 3.5s
+          setTimeout(()=> {
+            const h = document.getElementById('lbHint');
+            if (h) h.classList.add('hidden');
+            setTimeout(()=> { if(h && h.parentNode) h.parentNode.removeChild(h); }, 950);
+          }, 11500);
+        }
+
+        if (!isOpen && existing) {
+          // remove imediatamente quando modal fechar
+          existing.classList.add('hidden');
+          setTimeout(()=> { if(existing && existing.parentNode) existing.parentNode.removeChild(existing); }, 300);
+        }
+      }
+    }
+  });
+
+  observer.observe(modal, { attributes: true });
+
+  // fecha ao clicar em overlay que NÃO seja imagem (.lb-slide img)
+  modal.addEventListener('click', (e) => {
+    // se clicou em uma imagem -> não fecha
+    if (e.target.closest('.lb-slide img')) return;
+    // se clicou em algum elemento dentro da lb-content que não seja imagem (thumbs, indicadores)
+    // também consideramos que ele fecha
+    closeLightbox();
+  });
+
+  // ESC já fecha (se já tiver implementado, mantém)
+  document.addEventListener('keydown', (e)=> {
+    const modalEl = getLbModal();
+    if(!modalEl || !modalEl.classList.contains('open')) return;
+    if(e.key === 'Escape') closeLightbox();
+  });
+
+})();
+
+
   function renderLightboxImages(images){
     const thumbs = getLbThumbs();
     const indicator = getLbIndicator();

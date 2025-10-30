@@ -158,40 +158,41 @@ button{font:inherit}
   background: #fff;
 }
 /* Botão "×" padrão (mobile) */
-.close-btn { 
+/* --- hint: "Aperte em qualquer lugar para sair" --- */
+.lb-hint {
   position: absolute;
-  top: 210px;
-  right: 20px;
-  color: rgb(196, 179, 179);
-  font-size: 26px;
-  background: transparent;
-  border: none;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease;
-}
-.close-btn:hover {
-  background: rgba(255,255,255,0.25);
-  transform: scale(1.08);
+  left: 50%;
+  transform: translateX(-50%);
+  top: 8px;                 /* fica logo acima da imagem */
+  background: rgba(0,0,0,0.45);
+  color: rgba(255,255,255,0.92);
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+  z-index: 60;
+  opacity: 1;
+  transition: opacity .35s ease, transform .25s ease;
+  pointer-events: none; /* não intercepta cliques */
 }
 
-/* 💻 Ajuste para telas grandes (PC) */
-@media (min-width: 768px) {
-  .close-btn {
-    top: 300px;         /* bem perto da imagem */
-    right: 975px;
-    font-size: 22px;
-    background: rgba(255, 255, 255, 0.05);
-  }
-  .close-btn:hover {
-    background: rgba(255,255,255,0.15);
-    transform: scale(1.1);
-  }
+/* animação de saída (quando for removido) */
+.lb-hint.hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-6px);
+}
+
+/* garante que lb-content posicione relativo */
+.lb-content { position: relative; }
+
+/* removido: não usamos mais .close-btn, mas se existir mantenha invisível */
+.close-btn { display: none !important; }
+
+/* responsivo: no mobile deixamos um pouco menor */
+@media (max-width: 600px) {
+  .lb-hint { font-size:13px; top:6px; padding:5px 10px; }
 }
 
 
