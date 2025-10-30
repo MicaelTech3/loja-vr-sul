@@ -77,6 +77,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+
+   // ======== RETORNO DO MERCADO PAGO ========
+  document.addEventListener("DOMContentLoaded", () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const mpStatus = urlParams.get("status") || urlParams.get("mp_result");
+
+    if (mpStatus === "success") {
+      toast("✅ Compra concluída com sucesso!");
+    } else if (mpStatus === "pending") {
+      toast("🕐 Pagamento pendente. Aguarde a aprovação.");
+    } else if (mpStatus === "failure") {
+      toast("❌ Pagamento não foi aprovado.");
+    }
+  });
+
   // ======== Categories ========
   const catsWrap = el('#cats');
   let activeCat = 'Tudo';
