@@ -1,122 +1,70 @@
 // api/webhook.js
-import fetch from 'node-fetch';
-import admin from 'firebase-admin';
+const crypto = require('crypto');
+const fs = require('fs');
 
-const MP_TOKEN = process.env.MP_ACCESS_TOKEN; // Mercado Pago access token
-const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN; // Telegram bot token
-const TG_CHAT = process.env.TELEGRAM_CHAT_ID; // seu numero/chat id
-const FIREBASE_SA = process.env.FIREBASE_SERVICE_ACCOUNT; // JSON string
+const WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET || "";
 
-// inicializa Firebase Admin (apenas uma vez)
-if(!admin.apps.length){
-  const sa = FIREBASE_SA ? JSON.parse(FIREBASE_SA) : null;
-  admin.initializeApp({
-    credential: sa ? admin.credential.cert(sa) : admin.credential.applicationDefault()
-  });
-}
-const db = admin.firestore();
-
-async function sendTelegram(text){
-  if(!TG_TOKEN || !TG_CHAT) return;
-  const url = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`;
-  try{
-    await fetch(url, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ chat_id: TG_CHAT, text, parse_mode: 'HTML' })
-    });
-  }catch(e){ console.error('Erro Telegram', e); }
+function computeHmacSha256(secret, payload) {
+  return crypto.createHmac('sha256', String(secret)).update(payload, 'utf8').digest('hex');
 }
 
-export default async function handler(req, res){
-  // Mercado Pago webhooks geralmente chegam como POST com body:
-  // { type: 'payment', data: { id: 'PAYMENT_ID' }, ... }
-  try{
-    const evt = req.body || {};
-    // log curto
-    console.log('MP Webhook received', evt.type || evt);
-    // só tratamos pagamentos
-    if(evt.type !== 'payment' && evt.type !== 'merchant_order' && !(evt.data && evt.data.id)) {
-      return res.status(200).send('Ignored');
-    }
-    // extrair id do pagamento
-    const mpId = (evt.data && evt.data.id) || (evt.id) || null;
-    if(!mpId) return res.status(200).send('No id');
+module.exports = async (req, res) => {
+  try {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    // chamar Mercado Pago para pegar detalhes do payment
-    const mpUrl = `https://api.mercadopago.com/v1/payments/${mpId}`;
-    const mpResp = await fetch(mpUrl, {
-      headers: { Authorization: `Bearer ${MP_TOKEN}` }
-    });
-    if(!mpResp.ok){
-      console.error('MP fetch failed', await mpResp.text());
-      return res.status(500).send('MP fetch failed');
-    }
-    const payment = await mpResp.json();
-    console.log('Payment', payment.status, payment);
-
-    // montar dados do pedido
-    const status = payment.status; // "approved" quando pago
-    const externalRef = payment.external_reference || payment.order ? payment.order.id : null;
-    const payer = payment.payer || {};
-    const items = (payment.additional_info && payment.additional_info.items) || [];
-    const total = payment.transaction_amount || payment.total_paid_amount || payment.amount || 0;
-
-    // Atualizar Firestore: procurar pedido por orderId ou criar
-    // Vamos usar external_reference (você deve salvar orderId como external_reference ao criar preferência)
-    let orderDocRef = null;
-    if(externalRef){
-      const q = await db.collection('pedidos').where('orderId','==', externalRef).limit(1).get();
-      if(!q.empty) orderDocRef = q.docs[0].ref;
-    }
-    if(!orderDocRef){
-      // fallback: cria novo doc com id do mp
-      orderDocRef = db.collection('pedidos').doc(mpId);
-      await orderDocRef.set({
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        paymentId: mpId,
-        orderId: externalRef || null,
-        payer: { email: payer.email || null, phone: payer.phone || null, ...payer },
-        items,
-        total,
-        status
-      }, { merge:true });
+    // get raw body
+    let raw = '';
+    if (req.rawBody) {
+      raw = (typeof req.rawBody === 'string') ? req.rawBody : req.rawBody.toString('utf8');
+    } else if (req.body && typeof req.body === 'object' && Object.keys(req.body).length) {
+      raw = JSON.stringify(req.body);
     } else {
-      await orderDocRef.set({
-        status,
-        paymentId: mpId,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        total,
-        payer: { email: payer.email || null, phone: payer.phone || null }
-      }, { merge:true });
+      raw = await new Promise((resolve, reject) => {
+        let data = [];
+        req.on('data', chunk => data.push(chunk));
+        req.on('end', () => resolve(Buffer.concat(data).toString('utf8')));
+        req.on('error', err => reject(err));
+      });
     }
 
-    // Se pagamento aprovado -> notifica telegram e (opcional) envia WhatsApp pelo CallMeBot
-    if(status === 'approved'){
-      // montar mensagem legível
-      let msg = `✅ <b>Compra concluída</b>\n`;
-      msg += `Pedido: ${externalRef || mpId}\n`;
-      msg += `Valor: R$ ${Number(total).toFixed(2)}\n`;
-      if(payer.email) msg += `E-mail: ${payer.email}\n`;
-      if(payer.phone && payer.phone.number) msg += `Telefone: ${payer.phone.area_code || ''}${payer.phone.number}\n`;
-      if(items && items.length){
-        msg += `Itens:\n`;
-        items.forEach(it => msg += ` • ${it.title || it.id} — ${it.quantity||1} x R$ ${Number(it.unit_price||it.price||0).toFixed(2)}\n`);
+    // optional signature verification
+    let verified = false;
+    let signatureHeader = req.headers['x-hook-signature'] || req.headers['x-hub-signature'] || req.headers['x-hub-signature-256'] || req.headers['x-signature'] || req.headers['x-mercadopago-signature'];
+    if (WEBHOOK_SECRET) {
+      if (!signatureHeader) {
+        console.warn('Webhook secret configured but no signature header received.');
+      } else {
+        // compute hmac and compare (accept hex)
+        const computed = computeHmacSha256(WEBHOOK_SECRET, raw);
+        const incoming = String(signatureHeader).replace(/^(sha256=|sha1=)/i, '').trim();
+        if (computed === incoming) verified = true;
+        else console.warn('Webhook signature mismatch. incoming:', incoming, 'computed:', computed);
       }
-      msg += `\nLink Admin: https://seu-admin-url.com/minhas-vendas?order=${externalRef || mpId}`;
-
-      await sendTelegram(msg);
-
-      // optionally also send to CallMeBot (WHATSAPP) if you prefer:
-      // if(process.env.CALLMEBOT_KEY && process.env.CALLMEBOT_PHONE) {
-      //   const callUrl = `https://api.callmebot.com/whatsapp.php?phone=${process.env.CALLMEBOT_PHONE}&text=${encodeURIComponent(msg)}&apikey=${process.env.CALLMEBOT_KEY}`;
-      //   await fetch(callUrl);
-      // }
+    } else {
+      verified = true; // no secret => accept (debug mode)
     }
 
-    return res.status(200).send('ok');
-  }catch(err){
-    console.error('Webhook handler error', err);
-    return res.status(500).send('error');
+    const log = {
+      ts: new Date().toISOString(),
+      headers: req.headers,
+      verified,
+      rawBodyPreview: raw.slice(0, 4000),
+    };
+    console.log('WEBHOOK DEBUG:', JSON.stringify(log, null, 2));
+    try { fs.writeFileSync('/tmp/webhook_debug.json', JSON.stringify(log, null, 2)); } catch(e){}
+
+    if (!verified) {
+      return res.status(401).json({ ok: false, error: 'Not Authorized - invalid signature' });
+    }
+
+    // aqui você pode processar o evento (ex: atualizar Firestore, etc)
+    // Exemplo simples:
+    // const payload = JSON.parse(raw);
+    // if(payload.action === 'payment.updated') { ... }
+
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('webhook debug error', err);
+    return res.status(500).json({ ok: false, error: String(err) });
   }
-}
+};
