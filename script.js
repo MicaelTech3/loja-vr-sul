@@ -565,6 +565,15 @@ function createLbHint() {
     thumbs.scrollTo({ left: targetLeft, behavior:'smooth' });
   });
 
+  async function sendMessage(orderId, text) {
+  await fetch("/api/sendMessage", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orderId, from: "cliente", text })
+  });
+}
+
+
   document.addEventListener('keydown', (e)=>{
     const modal = getLbModal();
     if(!modal || !modal.classList.contains('open')) return;
