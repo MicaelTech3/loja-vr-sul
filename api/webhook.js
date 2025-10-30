@@ -1,12 +1,11 @@
 /**
  * Webhook Mercado Pago + Firestore + Telegram
- * Ambiente: Node.js Serverless (Vercel)
+ * Ambiente: Node.js (Vercel)
  */
 
 const axios = require("axios");
 const admin = require("firebase-admin");
 
-// --- Inicializa Firebase Admin ---
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.applicationDefault(),
@@ -16,40 +15,41 @@ const db = admin.firestore();
 
 module.exports = async (req, res) => {
   try {
-    // 🔹 Recebe corpo da requisição (Webhook)
+    // 🔹 Recebe corpo da requisição
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     console.log("Webhook recebido:", body);
 
-    // 🔹 Extrai dados principais
+    // 🔹 Extrai o ID do pagamento
     const action = body.action || body.type || "";
     let paymentId = null;
-
     if (body.data && body.data.id) paymentId = body.data.id;
     if (body.id && !paymentId) paymentId = body.id;
 
-    // 🔹 Filtra apenas pagamentos
+    // 🔹 Ignora se não for pagamento
     if (!action.includes("payment") && body.topic !== "payment") {
       return res.status(200).send("Ignorado (não é pagamento)");
     }
 
-    // 🔹 Busca detalhes do pagamento via API Mercado Pago
-    const MP_ACCESS = process.env.MP_ACCESS_TOKEN;
-    if (!MP_ACCESS) {
-      console.error("❌ MP_ACCESS_TOKEN não configurado no ambiente!");
-      return res.status(500).send("Erro interno: falta Access Token");
+    // 🔹 Acesso Mercado Pago
+    const MP_ACCESS_TOKEN = "APP_USR-1018752691222877-103012-445793c3ad7e9d84d56576424bbbbdd0-2956486419";
+    if (!MP_ACCESS_TOKEN) {
+      console.error("❌ Access token não configurado");
+      return res.status(500).send("Falta Access Token");
     }
 
+    // 🔹 Busca detalhes do pagamento
     let paymentData = null;
     try {
       const r = await axios.get(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-        headers: { Authorization: `Bearer ${MP_ACCESS}` },
+        headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` },
       });
       paymentData = r.data;
     } catch (e) {
-      console.error("Erro ao buscar detalhes do pagamento:", e.response?.data || e.message);
+      console.error("Erro ao buscar pagamento:", e.response?.data || e.message);
+      return res.status(500).send("Erro ao consultar pagamento");
     }
 
-    // 🔹 Extrai status e infos
+    // 🔹 Extrai dados
     const status = paymentData?.status || "unknown";
     const payerEmail = paymentData?.payer?.email || "-";
     const payerName = paymentData?.payer?.first_name || "";
@@ -58,48 +58,57 @@ module.exports = async (req, res) => {
     const description = paymentData?.description || "Pedido";
     const orderRef = paymentData?.external_reference || paymentId;
 
-    console.log(`Status recebido: ${status} | Pedido: ${orderRef}`);
+    console.log(`Pagamento ${paymentId}: ${status}`);
 
-    // 🔹 Atualiza no Firestore (se pedido existir)
+    // 🔹 Atualiza no Firestore
     if (orderRef) {
-      const orderRefDoc = db.collection("pedidos").doc(orderRef);
-      await orderRefDoc.set(
+      const ref = db.collection("pedidos").doc(orderRef.toString());
+      await ref.set(
         {
           status,
           pagoEm: admin.firestore.FieldValue.serverTimestamp(),
           valor: transactionAmount,
           email: payerEmail,
           telefone: payerPhone,
+          nome: payerName,
+          produto: description,
         },
         { merge: true }
       );
     }
 
-    // 🔹 Envia notificação para Telegram (opcional)
-    const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-    const TG_CHAT = process.env.TELEGRAM_CHAT_ID;
+    // 🔹 Envia mensagem no Telegram
+    const TELEGRAM_TOKEN = "7990320290:AAHltqfWhAnulHK5sqFxVMkhbT-bPtZPTyE";
+    const TELEGRAM_CHAT_ID = "SEU_CHAT_ID_AQUI"; // 👈 substitua depois pelo seu chat_id (veja instruções abaixo)
 
-    if (TG_TOKEN && TG_CHAT && (status === "approved" || status === "paid")) {
+    if (status === "approved" || status === "paid") {
       const msg = `
-✅ *Nova compra aprovada!*
+✅ *Nova compra confirmada!*
 
 🧾 Pedido: ${orderRef}
 📦 Produto: ${description}
-💰 Valor: R$ ${transactionAmount}
-👤 Cliente: ${payerName} (${payerEmail})
+💰 Valor: R$ ${transactionAmount.toFixed(2)}
+👤 Cliente: ${payerName}
+📧 Email: ${payerEmail}
 📞 Telefone: ${payerPhone}
 
-Ver mais em: https://loja-vr-sul.vercel.app/admin/vendas
+🕓 Status: ${status.toUpperCase()}
+
+Ver mais: https://loja-vr-sul.vercel.app/admin/vendas
 `;
 
-      await axios.post(`https://api.telegram.org/bot${7990320290}/sendMessage`, {
-        chat_id: TG_CHAT,
-        text: msg,
-        parse_mode: "Markdown",
-      });
+      try {
+        await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          chat_id: TELEGRAM_CHAT_ID,
+          text: msg,
+          parse_mode: "Markdown",
+        });
+        console.log("📩 Notificação enviada ao Telegram com sucesso!");
+      } catch (err) {
+        console.error("❌ Erro ao enviar Telegram:", err.response?.data || err.message);
+      }
     }
 
-    // 🔹 Retorna sucesso
     res.status(200).send("OK");
   } catch (err) {
     console.error("Erro no webhook:", err);
