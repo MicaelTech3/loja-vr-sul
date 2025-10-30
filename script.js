@@ -1,4 +1,29 @@
+// Substitua todo o script.js pelo conteúdo abaixo
 document.addEventListener("DOMContentLoaded", () => {
+  // ======== FIREBASE CONFIG (já está no seu index.html) ========
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyCh98WjSryhLJAcX_-COZoIUxIbhP6C8aI",
+    authDomain: "loja-vr-sul.firebaseapp.com",
+    projectId: "loja-vr-sul",
+    storageBucket: "loja-vr-sul.firebasestorage.app",
+    messagingSenderId: "485806314481",
+    appId: "1:485806314481:web:c9285cb38ba9d623b3aa50"
+  };
+
+  // Sem Cloud Functions por enquanto (modo grátis)
+  const CLOUD_FUNCTIONS_BASE = "";
+
+  // Inicializa Firebase compat (index.html já carrega os scripts compat)
+  if (typeof firebase === 'undefined') {
+    console.warn('Firebase SDK não encontrado. Verifique as tags <script> no HTML.');
+  } else {
+    try { firebase.initializeApp(FIREBASE_CONFIG); } catch(e) { /* ignora se já inicializado */ }
+  }
+  const auth = (typeof firebase !== 'undefined') ? firebase.auth() : null;
+  const db = (typeof firebase !== 'undefined') ? firebase.firestore() : null;
+
+  if (auth) auth.signInAnonymously().catch(err => console.error('Erro signin anon:', err));
+
   // ======== Utils ========
   const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
   const el = sel => document.querySelector(sel);
@@ -6,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const setText = (sel, v) => { const e = el(sel); if(e) e.textContent = v; };
   function toast(msg){ const t = el('#toast'); if(!t) return; t.textContent = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2200); }
 
-  // ======== Data (placeholder images) ========
+  // ======== Data ========
   const CATEGORIES = ['Tudo', 'Tênis', 'Calças', 'Blusas', 'Camisas', 'Verão', 'Inverno'];
   const PRODUCTS = [
     {id:'p1', title:'Tênis Casual Branco', price:199.90, cat:'Tênis'},
@@ -43,19 +68,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   function renderWishlistBadges(){
     document.querySelectorAll('[data-act="fav"]').forEach(h=>{
-      const card = h.closest('.card');
-      if(!card) return;
-      const id = card.dataset.id;
+      const card = h.closest('.card'); if(!card) return; const id = card.dataset.id;
       if(isInWishlist(id)) h.classList.add('wished'); else h.classList.remove('wished');
     });
   }
 
-  // ======== Categories (Desejo sempre no final) ========
+  // ======== Categories ========
   const catsWrap = el('#cats');
   let activeCat = 'Tudo';
   function renderCats(){
     if(!catsWrap) return;
-    const catsToShow = [...CATEGORIES, 'Desejo']; // Desejo sempre no final
+    const catsToShow = [...CATEGORIES, 'Desejo'];
     catsWrap.innerHTML = catsToShow.map(c=>`<button class="cat ${c===activeCat?'active':''}" data-cat="${c}">${c}</button>`).join('');
   }
 
@@ -63,9 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const grid = el('#grid');
   function productCard(p){
     return `<article class="card" data-id="${p.id}">
-      <div class="thumb" aria-hidden="false">
-        <img src="${p.images[0]}" alt="${p.title}">
-      </div>
+      <div class="thumb" aria-hidden="false"><img src="${p.images[0]}" alt="${p.title}"></div>
       <div class="card-body">
         <div class="title">${p.title}</div>
         <div class="price"><strong>${BRL.format(p.price)}</strong><small class="chip pix">PIX</small></div>
@@ -76,7 +97,6 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     </article>`;
   }
-
   function renderProducts(){
     if(!grid) return;
     const term = (el('#searchInput')?.value || '').trim().toLowerCase();
@@ -133,209 +153,165 @@ document.addEventListener("DOMContentLoaded", () => {
     setText('#sumTotal', BRL.format(total()));
     renderResume();
   }
-
   function openDrawer(){ if(drawer) drawer.classList.add('open'); }
   function closeDrawer(){ if(drawer) drawer.classList.remove('open'); }
 
-  // ======== Checkout & PIX only ========
+  // ======== Checkout UI ========
   const checkout = el('#checkoutModal');
-  function openCheckout(){ if(!Object.keys(cart).length){ toast('Adicione produtos antes de finalizar.'); return; } if(checkout) checkout.classList.add('open'); selectMethod('pix'); generatePix(); }
+  function openCheckout(){ if(!Object.keys(cart).length){ toast('Adicione produtos antes de finalizar.'); return; } if(checkout) checkout.classList.add('open'); selectMethod('pix'); /* renderização do QR acontece abaixo */ }
   function closeCheckout(){ if(checkout) checkout.classList.remove('open'); }
   function selectMethod(m){ els('.radio').forEach(r=>{ r.classList.toggle('active', r.dataset.method===m); }); if(el('#pixSection')) el('#pixSection').style.display = m==='pix' ? 'grid' : 'none'; }
   function renderResume(){ const items = cartItems(); const resume = el('#resumeList'); if(resume) resume.innerHTML = items.map(i=>`<div style="display:flex; justify-content:space-between;"><span>${i.qty}× ${i.title}</span><strong>${BRL.format(i.price*i.qty)}</strong></div>`).join(''); setText('#resumeSubtotal', BRL.format(subtotal())); setText('#resumeDiscounts', '-'); setText('#resumeTotal', BRL.format(total())); }
-  function makePixPayload(total){ const chave = 'pagamentos@lojavirtual.com.br'; const txid = 'LV' + Date.now().toString(36).toUpperCase(); return `PIX|LojaVirtual|chave:${chave}|txid:${txid}|valor:${total.toFixed(2)}|info:Pedido Loja Virtual (SIMULACAO)`; }
-  function generatePix(){ renderResume(); const payload = makePixPayload(total()); if(el('#pixCopy')) el('#pixCopy').value = payload; if(el('#qrcode')) el('#qrcode').innerHTML = '<div style="color:#000;padding:10px;text-align:center">[QR Code Simulado]</div>'; }
 
-  // ======== Lightbox / Gallery ========
+  // fallback/simulação PIX
+  function makePixPayload(total){ const chave = 'pagamentos@lojavirtual.com.br'; const txid = 'LV' + Date.now().toString(36).toUpperCase(); return `PIX|LojaVirtual|chave:${chave}|txid:${txid}|valor:${total.toFixed(2)}|info:Pedido Loja Virtual (SIMULACAO)`; }
+  function generatePixSimulado(){ renderResume(); const payload = makePixPayload(total()); if(el('#pixCopy')) el('#pixCopy').value = payload; if(el('#qrcode')) el('#qrcode').innerHTML = '<div style="color:#000;padding:10px;text-align:center">[QR Code Simulado]</div>'; }
+
+  // ======== Pedidos no Firestore (cliente-only) ========
+  // Cria pedido no Firestore e retorna docRef (usando auth.currentUser.uid)
+  async function createOrderInFirestore({ items, total, email, descricao }) {
+    if(!db || !auth) { throw new Error('Firestore não inicializado'); }
+    const user = auth.currentUser;
+    if(!user) throw new Error('Usuário não autenticado');
+
+    const data = {
+      userId: user.uid,
+      items,
+      total,
+      email,
+      descricao,
+      status: 'pending',
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    const ref = await db.collection('pedidos').add(data);
+    return ref;
+  }
+
+  // Atualiza status do pedido
+  async function updateOrderStatus(orderId, status) {
+    if(!db) return;
+    await db.collection('pedidos').doc(orderId).set({ status, atualizadoEm: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+  }
+
+  // Fluxo: ao clicar Finalizar compra -> cria pedido no Firestore e mostra QR (simulado)
+  let currentOrderUnsub = null;
+  async function checkoutFlowCreateOrder() {
+  try {
+    const items = cartItems();
+    if (!items.length) return toast("Carrinho vazio");
+
+    const totalValue = total();
+    const email = "cliente@teste.com"; // depois você pode substituir por email real do Firebase
+
+    const payload = {
+      orderId: "LV-" + Date.now(),
+      items: items.map(i => ({
+        id: i.id,
+        title: i.title,
+        price: i.price,
+        qty: i.qty || 1
+      })),
+      payer: { email },
+      back_urls: {
+        success: window.location.origin + "?mp_result=success",
+        failure: window.location.origin + "?mp_result=failure",
+        pending: window.location.origin + "?mp_result=pending",
+      },
+    };
+
+    // Chama sua API no Vercel
+    const resp = await fetch("/api/createPreference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Erro ao criar preferência");
+
+    // Abre o checkout MercadoPago
+    window.open(data.init_point, "_blank");
+    toast("Checkout Mercado Pago aberto!");
+  } catch (err) {
+    console.error(err);
+    toast("Erro ao abrir pagamento Mercado Pago");
+  }
+}
+
+
+  // Quando usuário clicar "Já paguei" no modal -> atualiza o pedido para paid
+  async function onUserClickedPaid() {
+    const orderId = el('#checkoutModal')?.dataset?.currentOrder;
+    if(!orderId) { // fallback: se não tem order criado, gerar apenas simulação
+      toast('Nenhum pedido associado. Criando pedido simulado...');
+      await checkoutFlowCreateOrder();
+      return;
+    }
+    try {
+      await updateOrderStatus(orderId, 'paid');
+      toast('Obrigado! Vamos processar seu pedido.');
+    } catch(err) {
+      console.error('Erro updateOrderStatus', err);
+      toast('Erro ao marcar como pago.');
+    }
+  }
+
+  // Mostrar botão Meus Produtos e painel (se não existir)
+  let ordersUnsub = null;
+  function showMyOrdersButton(){
+    if(el('#myOrdersBtn')) return;
+    el('#cartOpenBtn').insertAdjacentHTML('afterend', `<button id="myOrdersBtn" class="btn">Meus Produtos</button>`);
+    el('#myOrdersBtn').addEventListener('click', openOrdersPanel);
+  }
+
+  function openOrdersPanel(){
+    // cria painel simples se não existir
+    if(!el('#ordersPanel')) {
+      document.body.insertAdjacentHTML('beforeend', `
+        <div id="ordersPanel" style="position:fixed; inset:80px 12px 12px 12px; background:var(--card); border-radius:12px; z-index:2000; padding:12px; overflow:auto;">
+          <button id="closeOrdersPanel" class="close-x" style="float:right">Fechar</button>
+          <h3>Meus Pedidos</h3>
+          <div id="ordersList"></div>
+        </div>
+      `);
+      el('#closeOrdersPanel').addEventListener('click', ()=> el('#ordersPanel').remove());
+    }
+    // abre e ouve a coleção
+    const user = auth.currentUser;
+    if(!user) { toast('Autenticando...'); return; }
+    const q = db.collection('pedidos').where('userId','==',user.uid).orderBy('criadoEm','desc');
+    if(ordersUnsub) ordersUnsub();
+    ordersUnsub = q.onSnapshot(snap=>{
+      const list = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      const out = list.length ? list.map(p => `
+        <div style="padding:10px;border-bottom:1px solid rgba(255,255,255,.06)">
+          <strong>${p.descricao || 'Pedido'}</strong><br>
+          Status: <strong>${p.status}</strong><br>
+          Valor: ${BRL.format(p.total || 0)}<br>
+          Criado: ${p.criadoEm && p.criadoEm.toDate ? p.criadoEm.toDate().toLocaleString() : ''}
+        </div>
+      `).join('') : '<div style="opacity:.7;padding:12px">Nenhum pedido.</div>';
+      el('#ordersList').innerHTML = out;
+      el('#ordersPanel').style.display = 'block';
+    });
+  }
+
+  // ======== Lightbox, search, events (mesma lógica antiga) ========
   function getLbModal(){ return el('#lightboxModal'); }
   function getLbThumbs(){ return el('#lbThumbs'); }
   function getLbIndicator(){ return el('#lbIndicator'); }
   function getLbCounter(){ return el('#lbCounter'); }
   const blurTargets = [...document.querySelectorAll('.container, .topbar')];
   let currentGallery = null;
+  function openLightbox(productId){ const p = PRODUCTS.find(x=>x.id===productId); if(!p) return; currentGallery=p; renderLightboxImages(p.images); const modal=getLbModal(); if(!modal) return; modal.classList.add('open'); modal.setAttribute('aria-hidden','false'); blurTargets.forEach(t=>t.classList.add('modal-blur-target','blurred')); getLbThumbs()?.focus(); }
+  function closeLightbox(){ const modal=getLbModal(); if(!modal) return; modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); blurTargets.forEach(t=>t.classList.remove('blurred')); currentGallery=null; }
+  function renderLightboxImages(images){ const thumbs=getLbThumbs(), indicator=getLbIndicator(); if(!thumbs||!indicator) return; const imgSlides = images.map((src, idx)=>`<div class="lb-slide" data-idx="${idx}"><img src="${src}" alt="Imagem ${idx+1}"></div>`).join(''); thumbs.innerHTML=imgSlides; indicator.innerHTML = images.map((_,i)=>`<div class="lb-dot" data-idx="${i}"></div>`).join('') + `<div id="lbCounter" class="lb-counter"></div>`; enableDragScroll(thumbs); requestAnimationFrame(()=>{ thumbs.scrollLeft=0; updateIndicator(); }); }
+  function updateIndicator(){ const thumbs=getLbThumbs(), indicator=getLbIndicator(), counterEl=getLbCounter(); if(!thumbs||!indicator) return; const slides=[...thumbs.querySelectorAll('.lb-slide')]; if(!slides.length) return; const containerRect=thumbs.getBoundingClientRect(); const containerCenter=containerRect.left+containerRect.width/2; let bestIdx=-1, bestDist=Infinity; slides.forEach(s=>{ const r=s.getBoundingClientRect(); const center=r.left+r.width/2; const d=Math.abs(center-containerCenter); if(d<bestDist){ bestDist=d; bestIdx=Number(s.dataset.idx||0); } }); const dots=[...indicator.querySelectorAll('.lb-dot')]; dots.forEach(d=> d.classList.toggle('active', Number(d.dataset.idx)===bestIdx)); if(!counterEl) return; const total=slides.length; const index = bestIdx>=0?bestIdx:0; counterEl.textContent = `${index+1} / ${total}`; }
+  function enableDragScroll(container){ if(!container) return; container.onpointerdown=null; container.onpointermove=null; container.onpointerup=null; container.onpointercancel=null; container.onpointerleave=null; container.onscroll=null; let isDown=false,startX=0,scrollLeft=0; container.onpointerdown=(e)=>{ isDown=true; try{container.setPointerCapture(e.pointerId)}catch{}; startX=e.clientX; scrollLeft=container.scrollLeft; container.classList.add('dragging'); }; container.onpointermove=(e)=>{ if(!isDown) return; const x=e.clientX; const walk=(startX-x); container.scrollLeft = scrollLeft + walk; updateIndicator(); }; const up=(e)=>{ if(!isDown) return; isDown=false; try{container.releasePointerCapture(e.pointerId)}catch{}; container.classList.remove('dragging'); snapToClosest(container); }; container.onpointerup=up; container.onpointercancel=up; container.onpointerleave=(e)=>{ if(isDown) up(e); }; container.onscroll = throttle(updateIndicator, 60); }
+  function snapToClosest(container){ const slides=[...container.querySelectorAll('.lb-slide')]; if(!slides.length) return; const containerRect=container.getBoundingClientRect(); const containerCenter=containerRect.left+containerRect.width/2; let best=slides[0], bestD=Infinity; slides.forEach(s=>{ const r=s.getBoundingClientRect(); const center=r.left+r.width/2; const d=Math.abs(center-containerCenter); if(d<bestD){ bestD=d; best=s; } }); const targetLeft = best.offsetLeft - (container.clientWidth - best.clientWidth)/2; container.scrollTo({ left: targetLeft, behavior:'smooth' }); }
+  function throttle(fn, wait){ let last=0; return (...args)=>{ const now=Date.now(); if(now-last>wait){ last=now; fn(...args); } }; }
 
-  function openLightbox(productId){
-    const p = PRODUCTS.find(x=>x.id===productId);
-    if(!p) return;
-    currentGallery = p;
-    renderLightboxImages(p.images);
-    const modal = getLbModal();
-    if(!modal) return;
-    modal.classList.add('open');
-    modal.setAttribute('aria-hidden','false');
-    blurTargets.forEach(t => t.classList.add('modal-blur-target','blurred'));
-    const thumbs = getLbThumbs();
-    if(thumbs) thumbs.focus();
-  }
-
-  function closeLightbox(){
-    const modal = getLbModal();
-    if(!modal) return;
-    modal.classList.remove('open');
-    modal.setAttribute('aria-hidden','true');
-    blurTargets.forEach(t => t.classList.remove('blurred'));
-    currentGallery = null;
-  }
-
-  function renderLightboxImages(images){
-    const thumbs = getLbThumbs();
-    const indicator = getLbIndicator();
-    if(!thumbs || !indicator) return;
-
-    // create slides only for images (no Desejo slide)
-    const imgSlides = images.map((src, idx) => `
-      <div class="lb-slide" data-idx="${idx}">
-        <img src="${src}" alt="Imagem ${idx+1}">
-      </div>
-    `).join('');
-
-    thumbs.innerHTML = imgSlides;
-    indicator.innerHTML = images.map((_,i)=>`<div class="lb-dot" data-idx="${i}"></div>`).join('') + `<div id="lbCounter" class="lb-counter"></div>`;
-
-    enableDragScroll(thumbs);
-    requestAnimationFrame(()=>{ thumbs.scrollLeft = 0; updateIndicator(); });
-  }
-
-  function updateIndicator(){
-    const thumbs = getLbThumbs();
-    const indicator = getLbIndicator();
-    const counterEl = getLbCounter();
-    if(!thumbs || !indicator) return;
-    const slides = [...thumbs.querySelectorAll('.lb-slide')];
-    if(!slides.length) return;
-
-    const containerRect = thumbs.getBoundingClientRect();
-    const containerCenter = containerRect.left + containerRect.width/2;
-
-    let bestIdx = -1;
-    let bestDist = Infinity;
-    slides.forEach(s=>{
-      const r = s.getBoundingClientRect();
-      const center = r.left + r.width/2;
-      const d = Math.abs(center - containerCenter);
-      if(d < bestDist){ bestDist = d; bestIdx = Number(s.dataset.idx ?? -1); }
-    });
-
-    // update dots
-    const dots = [...indicator.querySelectorAll('.lb-dot')];
-    dots.forEach(d => {
-      const didx = Number(d.dataset.idx);
-      d.classList.toggle('active', didx === bestIdx);
-    });
-
-    // update counter white
-    if(!counterEl) return;
-    const total = slides.length;
-    const index = bestIdx >= 0 ? bestIdx : 0;
-    counterEl.textContent = `${index + 1} / ${total}`;
-  }
-
-  // Drag + snap
-  function enableDragScroll(container){
-    if(!container) return;
-    // detach old handlers
-    container.onpointerdown = null;
-    container.onpointermove = null;
-    container.onpointerup = null;
-    container.onpointercancel = null;
-    container.onpointerleave = null;
-    container.onscroll = null;
-
-    let isDown=false, startX=0, scrollLeft=0;
-    container.onpointerdown = (e)=>{
-      isDown=true;
-      try{ container.setPointerCapture(e.pointerId); }catch(err){}
-      startX = e.clientX;
-      scrollLeft = container.scrollLeft;
-      container.classList.add('dragging');
-    };
-    container.onpointermove = (e)=>{
-      if(!isDown) return;
-      const x = e.clientX;
-      const walk = (startX - x);
-      container.scrollLeft = scrollLeft + walk;
-      updateIndicator();
-    };
-    const up = (e)=>{
-      if(!isDown) return;
-      isDown=false;
-      try{ container.releasePointerCapture(e.pointerId); }catch(err){}
-      container.classList.remove('dragging');
-      snapToClosest(container);
-    };
-    container.onpointerup = up;
-    container.onpointercancel = up;
-    container.onpointerleave = (e)=> { if(isDown) up(e); };
-    container.onscroll = throttle(updateIndicator, 60);
-  }
-
-  function snapToClosest(container){
-    const slides = [...container.querySelectorAll('.lb-slide')];
-    if(!slides.length) return;
-    const containerRect = container.getBoundingClientRect();
-    const containerCenter = containerRect.left + containerRect.width/2;
-    let best = slides[0];
-    let bestD = Infinity;
-    slides.forEach(s=>{
-      const r = s.getBoundingClientRect();
-      const center = r.left + r.width/2;
-      const d = Math.abs(center - containerCenter);
-      if(d < bestD){ bestD = d; best = s; }
-    });
-    const targetLeft = best.offsetLeft - (container.clientWidth - best.clientWidth)/2;
-    container.scrollTo({ left: targetLeft, behavior:'smooth' });
-  }
-
-  function throttle(fn, wait){
-    let last = 0;
-    return (...args) => {
-      const now = Date.now();
-      if(now - last > wait){ last = now; fn(...args); }
-    };
-  }
-
-  // dots click delegated
-  document.addEventListener('click', (ev)=>{
-    const d = ev.target.closest('.lb-dot');
-    if(!d) return;
-    const idx = Number(d.dataset.idx);
-    const thumbs = getLbThumbs();
-    if(!thumbs) return;
-    const slide = thumbs.querySelector(`.lb-slide[data-idx="${idx}"]`);
-    if(!slide) return;
-    const targetLeft = slide.offsetLeft - (thumbs.clientWidth - slide.clientWidth)/2;
-    thumbs.scrollTo({ left: targetLeft, behavior:'smooth' });
-  });
-
-  // keyboard nav for lightbox
-  document.addEventListener('keydown', (e)=>{
-    const modal = getLbModal();
-    if(!modal || !modal.classList.contains('open')) return;
-    const thumbs = getLbThumbs();
-    const indicator = getLbIndicator();
-    if(e.key === 'Escape') { closeLightbox(); return; }
-    if(e.key === 'ArrowRight'){
-      const cur = Number(indicator.querySelector('.lb-dot.active')?.dataset.idx || 0);
-      const slides = thumbs.querySelectorAll('.lb-slide');
-      const next = Math.min(slides.length-1, cur+1);
-      const slide = thumbs.querySelector(`.lb-slide[data-idx="${next}"]`);
-      if(slide) thumbs.scrollTo({ left: slide.offsetLeft - (thumbs.clientWidth - slide.clientWidth)/2, behavior:'smooth' });
-    }
-    if(e.key === 'ArrowLeft'){
-      const cur = Number(indicator.querySelector('.lb-dot.active')?.dataset.idx || 0);
-      const prev = Math.max(0, cur-1);
-      const slide = thumbs.querySelector(`.lb-slide[data-idx="${prev}"]`);
-      if(slide) thumbs.scrollTo({ left: slide.offsetLeft - (thumbs.clientWidth - slide.clientWidth)/2, behavior:'smooth' });
-    }
-  });
-
-  // close lightbox overlay and X
-  document.addEventListener('click', (ev)=>{
-    if(ev.target.id === 'lightboxModal') closeLightbox();
-    if(ev.target.id === 'lbClose') closeLightbox();
-  });
-
-  // ======== Global click handlers (cards, wishlist, cart, etc.) ========
+  // ======== Eventos globais delegados ========
   document.addEventListener('click', (ev)=>{
     const target = ev.target;
     const addBtn = target.closest('[data-act="add"]');
@@ -358,100 +334,62 @@ document.addEventListener("DOMContentLoaded", () => {
     if(plus) { setQty(plus.dataset.plus, (cart[plus.dataset.plus]||1)+1); return; }
     if(minus) { setQty(minus.dataset.minus, (cart[minus.dataset.minus]||1)-1); return; }
     if(rm) { removeFromCart(rm.dataset.rm); return; }
-    if(checkoutBtn) { closeDrawer(); openCheckout(); return; }
+    if(checkoutBtn) { closeDrawer(); checkoutFlowCreateOrder(); openCheckout(); return; }
     if(closeCheckoutBtn) { closeCheckout(); return; }
     if(copyBtn) { if(navigator.clipboard) navigator.clipboard.writeText(el('#pixCopy')?.value || ''); toast('Chave PIX copiada!'); return; }
-    if(paidBtn) { toast('Pagamento confirmado (simulação)'); cart={}; saveCart(); renderCart(); closeCheckout(); return; }
+    if(paidBtn) { onUserClickedPaid(); return; } // agora atualiza o pedido real
     if(cancelPixBtn) { closeCheckout(); return; }
 
-    // click on image (.thumb) opens gallery
     const thumb = target.closest('.thumb');
-    if(thumb){
-      const card = thumb.closest('.card');
-      if(card) openLightbox(card.dataset.id);
-      return;
-    }
+    if(thumb){ const card = thumb.closest('.card'); if(card) openLightbox(card.dataset.id); return; }
 
-    // click on title opens gallery
     const title = target.closest('.title');
-    if(title){
-      const card = title.closest('.card');
-      if(card) openLightbox(card.dataset.id);
-      return;
-    }
+    if(title){ const card = title.closest('.card'); if(card) openLightbox(card.dataset.id); return; }
 
-    // click on card (not interactive element) opens gallery
     const card = target.closest('.card');
-    if(card){
-      if(ev.target.closest('button, [data-act], .btn, .icon, input, svg')) return;
-      openLightbox(card.dataset.id);
-      return;
-    }
+    if(card){ if(ev.target.closest('button, [data-act], .btn, .icon, input, svg')) return; openLightbox(card.dataset.id); return; }
 
     const radio = target.closest('.radio');
     if(radio){ selectMethod(radio.dataset.method); return; }
   });
 
-  // ========== SEARCH EXPAND (POSICIONAMENTO DINÂMICO NO MOBILE) ==========
+  // dots click delegated
+  document.addEventListener('click', (ev)=>{
+    const d = ev.target.closest('.lb-dot'); if(!d) return; const idx = Number(d.dataset.idx); const thumbs = getLbThumbs(); if(!thumbs) return; const slide = thumbs.querySelector(`.lb-slide[data-idx="${idx}"]`); if(!slide) return; const targetLeft = slide.offsetLeft - (thumbs.clientWidth - slide.clientWidth)/2; thumbs.scrollTo({ left: targetLeft, behavior:'smooth' });
+  });
+
+  // keyboard nav for lightbox
+  document.addEventListener('keydown', (e)=>{
+    const modal = getLbModal(); if(!modal || !modal.classList.contains('open')) return; const thumbs = getLbThumbs(); const indicator = getLbIndicator();
+    if(e.key === 'Escape') { closeLightbox(); return; }
+    if(e.key === 'ArrowRight'){ const cur = Number(indicator.querySelector('.lb-dot.active')?.dataset.idx || 0); const slides = thumbs.querySelectorAll('.lb-slide'); const next = Math.min(slides.length-1, cur+1); const slide = thumbs.querySelector(`.lb-slide[data-idx="${next}"]`); if(slide) thumbs.scrollTo({ left: slide.offsetLeft - (thumbs.clientWidth - slide.clientWidth)/2, behavior:'smooth' }); }
+    if(e.key === 'ArrowLeft'){ const cur = Number(indicator.querySelector('.lb-dot.active')?.dataset.idx || 0); const prev = Math.max(0, cur-1); const slide = thumbs.querySelector(`.lb-slide[data-idx="${prev}"]`); if(slide) thumbs.scrollTo({ left: slide.offsetLeft - (thumbs.clientWidth - slide.clientWidth)/2, behavior:'smooth' }); }
+  });
+
+  // search expand mobile (mesma lógica)
   (function setupExpandableSearch(){
     const searchWrap = document.querySelector('.search');
     const searchInput = document.querySelector('#searchInput');
     const brand = document.querySelector('.brand');
     const topbarWrap = document.querySelector('.topbar-wrap');
-
     if(!searchWrap || !searchInput || !brand || !topbarWrap) return;
-
     function applyPosition(){
-      if(window.innerWidth > 600){
-        searchWrap.style.left = '';
-        searchWrap.style.top = '';
-        searchWrap.style.right = '';
-        return;
-      }
+      if(window.innerWidth > 600){ searchWrap.style.left=''; searchWrap.style.top=''; searchWrap.style.right=''; return; }
       const brandRect = brand.getBoundingClientRect();
       const containerRect = topbarWrap.getBoundingClientRect();
-      const gap = 10; // espaço entre marca e busca
+      const gap = 10;
       const leftPos = brandRect.right - containerRect.left + gap;
-      const topPos = brandRect.top - containerRect.top + (brandRect.height - searchWrap.offsetHeight) / 2;
-      searchWrap.style.left = `${leftPos}px`;
-      searchWrap.style.top = `${topPos}px`;
-      searchWrap.style.right = '12px';
+      const topPos = brandRect.top - containerRect.top + (brandRect.height - searchWrap.offsetHeight)/2;
+      searchWrap.style.left = `${leftPos}px`; searchWrap.style.top = `${topPos}px`; searchWrap.style.right='12px';
     }
-
-    function expand(){
-      searchWrap.classList.add('expanded');
-      document.body.classList.add('search-open');
-      applyPosition();
-      if(window.innerWidth <= 600) window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-    function collapse(){
-      searchWrap.classList.remove('expanded');
-      document.body.classList.remove('search-open');
-      searchWrap.style.left = '';
-      searchWrap.style.top = '';
-      searchWrap.style.right = '';
-    }
-
+    function expand(){ searchWrap.classList.add('expanded'); document.body.classList.add('search-open'); applyPosition(); if(window.innerWidth<=600) window.scrollTo({top:0,behavior:'smooth'}); }
+    function collapse(){ searchWrap.classList.remove('expanded'); document.body.classList.remove('search-open'); searchWrap.style.left=''; searchWrap.style.top=''; searchWrap.style.right=''; }
     searchInput.addEventListener('focus', expand);
-    searchInput.addEventListener('input', ()=> { if(window.innerWidth <= 600) searchWrap.classList.add('expanded'); });
-
-    document.addEventListener('click', (e)=>{
-      if(window.innerWidth > 600) return;
-      const inside = e.target.closest('.search');
-      if(!inside) collapse();
-    });
-
-    window.addEventListener('resize', ()=> {
-      if(window.innerWidth > 600) collapse();
-      else if(searchWrap.classList.contains('expanded')) applyPosition();
-    });
-
-    window.addEventListener('load', ()=> { if(searchWrap.classList.contains('expanded')) applyPosition(); });
-
-    try {
-      const mo = new MutationObserver(()=> { if(searchWrap.classList.contains('expanded')) applyPosition(); });
-      mo.observe(topbarWrap, { childList: true, subtree: true, attributes: true });
-    } catch(e){}
+    searchInput.addEventListener('input', ()=>{ if(window.innerWidth<=600) searchWrap.classList.add('expanded'); });
+    document.addEventListener('click', (e)=>{ if(window.innerWidth>600) return; const inside = e.target.closest('.search'); if(!inside) collapse(); });
+    window.addEventListener('resize', ()=>{ if(window.innerWidth>600) collapse(); else if(searchWrap.classList.contains('expanded')) applyPosition(); });
+    window.addEventListener('load', ()=>{ if(searchWrap.classList.contains('expanded')) applyPosition(); });
+    try{ const mo = new MutationObserver(()=>{ if(searchWrap.classList.contains('expanded')) applyPosition(); }); mo.observe(topbarWrap, { childList:true, subtree:true, attributes:true }); }catch(e){}
   })();
 
   // attach search filter and category clicks
@@ -468,5 +406,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // init
   renderCats(); renderProducts(); renderCart(); updateBadge(); renderWishlistBadges();
-  window.addEventListener('resize', throttle(()=>{ const thumbs = getLbThumbs(); if(getLbModal()?.classList.contains('open') && thumbs) snapToClosest(thumbs); }, 120));
+
+  // debug auth state
+  if(auth){ auth.onAuthStateChanged(u => { if(u) console.log('User auth uid:', u.uid); else console.log('User signed out'); }); }
 });
