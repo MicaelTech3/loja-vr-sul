@@ -2,7 +2,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 
-const WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET || "";
+const WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET || "TEST-7888697175566126-102920-d1744441f7c0bb9fd20836659c6bf6e5-1076958819";
 
 function computeHmacSha256(secret, payload) {
   return crypto.createHmac('sha256', String(secret)).update(payload, 'utf8').digest('hex');
