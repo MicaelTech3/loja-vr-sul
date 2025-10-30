@@ -109,24 +109,65 @@ button{font:inherit}
 .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(23,33,53,.95); border:1px solid rgba(255,255,255,.12); padding:10px 14px; border-radius:12px; display:none; z-index:200}
 .toast.show{display:block}
 
-/* Lightbox / gallery */
-.lightbox{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background: rgba(6,8,12,0.55); z-index:9999; backdrop-filter: blur(4px); }
-.lightbox.open{ display:flex; }
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.lightbox.open { display: flex; }
 
-.lightbox-sheet{ width:min(920px,96vw); max-width:1200px; height:min(680px,88vh); background: linear-gradient(180deg, rgba(12,14,20,0.95), rgba(12,14,20,0.98)); border-radius:14px; padding:18px; position:relative; box-shadow:0 30px 80px rgba(2,6,23,.7); display:flex; flex-direction:column; gap:12px; overflow:hidden; }
-.lb-close{ position:absolute; right:12px; top:12px; z-index:3; border:none; background:transparent; color:var(--danger); font-size:20px; width:36px; height:36px; display:grid; place-items:center; cursor:pointer; border-radius:8px; }
-.lb-thumbs{ height: calc(100% - 28px); display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; padding-bottom:6px; align-items:center; }
-.lb-thumbs::-webkit-scrollbar{ height:10px }
-.lb-thumbs::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.12); border-radius:8px }
-.lb-slide{ min-width:80%; max-width:80%; height:100%; flex:0 0 80%; background:#0b0b0b; border-radius:12px; display:flex; align-items:center; justify-content:center; scroll-snap-align:center; position:relative; overflow:hidden; user-select:none; }
-@media (max-width:900px){ .lb-slide{min-width:90%; max-width:90%} }
-.lb-slide img{ width:100%; height:100%; object-fit:cover; object-position:center; display:block; }
-.lb-indicator{ display:flex; gap:8px; justify-content:center; align-items:center; height:28px; position:relative; }
-.lb-dot{ width:8px; height:8px; border-radius:999px; background:rgba(255,255,255,.18); transition:transform .18s, background .18s; }
-.lb-dot.active{ background:var(--primary); transform:scale(1.15); }
-.lb-counter{ background:#fff; color:#111; padding:4px 8px; border-radius:999px; font-weight:700; font-size:13px; margin-left:8px; min-width:54px; text-align:center; }
-.lb-slide.lb-desejo{ display:none !important; }
-.lb-desejo #lbWishListPanel{ background: rgba(255,255,255,0.02); padding:10px; border-radius:8px; }
+.lb-content {
+  width: 90%;
+  max-width: 500px;
+  background: #000;
+  padding: 12px;
+  border-radius: 10px;
+}
+.lb-thumbs {
+  display: flex;
+  overflow-x: auto;
+  gap: 8px;
+  scroll-snap-type: x mandatory;
+}
+.lb-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+}
+.lb-slide img {
+  width: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.lb-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.lb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff4;
+}
+.lb-dot.active {
+  background: #fff;
+}
+.close-btn {
+  position: absolute;
+  top: 20px;
+  right: 30px;
+  color: white;
+  font-size: 24px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
 
 /* heart wished style */
 [data-act="fav"].wished{ color: var(--primary-2); transform:scale(1.06); }

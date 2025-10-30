@@ -198,6 +198,179 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
+  // ======== Lightbox / Galeria ========
+  function getLbModal(){ return el('#lightboxModal'); }
+  function getLbThumbs(){ return el('#lbThumbs'); }
+  function getLbIndicator(){ return el('#lbIndicator'); }
+  function getLbCounter(){ return el('#lbCounter'); }
+
+  const blurTargets = [...document.querySelectorAll('.container, .topbar')];
+  let currentGallery = null;
+
+  // abre a galeria com as 4 imagens
+  function openLightbox(productId){
+    const p = PRODUCTS.find(x => x.id === productId);
+    if(!p) return;
+    currentGallery = p;
+    renderLightboxImages(p.images);
+    const modal = getLbModal();
+    if(!modal) return;
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden','false');
+    blurTargets.forEach(t => t.classList.add('blurred'));
+    getLbThumbs()?.focus();
+  }
+
+  function closeLightbox(){
+    const modal = getLbModal();
+    if(!modal) return;
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden','true');
+    blurTargets.forEach(t => t.classList.remove('blurred'));
+    currentGallery = null;
+  }
+
+  function renderLightboxImages(images){
+    const thumbs = getLbThumbs();
+    const indicator = getLbIndicator();
+    if(!thumbs || !indicator) return;
+
+    const imgSlides = images.map((src, idx) => `
+      <div class="lb-slide" data-idx="${idx}">
+        <img src="${src}" alt="Imagem ${idx+1}">
+      </div>
+    `).join('');
+
+    thumbs.innerHTML = imgSlides;
+    indicator.innerHTML = images.map((_,i)=>`<div class="lb-dot" data-idx="${i}"></div>`).join('') + `<div id="lbCounter" class="lb-counter"></div>`;
+
+    enableDragScroll(thumbs);
+    requestAnimationFrame(()=>{ thumbs.scrollLeft = 0; updateIndicator(); });
+  }
+
+  function updateIndicator(){
+    const thumbs = getLbThumbs();
+    const indicator = getLbIndicator();
+    const counterEl = getLbCounter();
+    if(!thumbs || !indicator) return;
+    const slides = [...thumbs.querySelectorAll('.lb-slide')];
+    if(!slides.length) return;
+
+    const containerRect = thumbs.getBoundingClientRect();
+    const containerCenter = containerRect.left + containerRect.width/2;
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    slides.forEach(s=>{
+      const r = s.getBoundingClientRect();
+      const center = r.left + r.width/2;
+      const d = Math.abs(center - containerCenter);
+      if(d < bestDist){ bestDist = d; bestIdx = Number(s.dataset.idx ?? -1); }
+    });
+
+    const dots = [...indicator.querySelectorAll('.lb-dot')];
+    dots.forEach(d => {
+      const didx = Number(d.dataset.idx);
+      d.classList.toggle('active', didx === bestIdx);
+    });
+
+    if(!counterEl) return;
+    const total = slides.length;
+    const index = bestIdx >= 0 ? bestIdx : 0;
+    counterEl.textContent = `${index + 1} / ${total}`;
+  }
+
+  function enableDragScroll(container){
+    if(!container) return;
+    let isDown=false, startX=0, scrollLeft=0;
+    container.onpointerdown = (e)=>{
+      isDown=true;
+      try{ container.setPointerCapture(e.pointerId); }catch(err){}
+      startX = e.clientX;
+      scrollLeft = container.scrollLeft;
+      container.classList.add('dragging');
+    };
+    container.onpointermove = (e)=>{
+      if(!isDown) return;
+      const x = e.clientX;
+      const walk = (startX - x);
+      container.scrollLeft = scrollLeft + walk;
+      updateIndicator();
+    };
+    const up = (e)=>{
+      if(!isDown) return;
+      isDown=false;
+      try{ container.releasePointerCapture(e.pointerId); }catch(err){}
+      container.classList.remove('dragging');
+      snapToClosest(container);
+    };
+    container.onpointerup = up;
+    container.onpointercancel = up;
+    container.onpointerleave = e=>{ if(isDown) up(e); };
+    container.onscroll = throttle(updateIndicator, 60);
+  }
+
+  function snapToClosest(container){
+    const slides = [...container.querySelectorAll('.lb-slide')];
+    if(!slides.length) return;
+    const containerRect = container.getBoundingClientRect();
+    const containerCenter = containerRect.left + containerRect.width/2;
+    let best = slides[0];
+    let bestD = Infinity;
+    slides.forEach(s=>{
+      const r = s.getBoundingClientRect();
+      const center = r.left + r.width/2;
+      const d = Math.abs(center - containerCenter);
+      if(d < bestD){ bestD = d; best = s; }
+    });
+    const targetLeft = best.offsetLeft - (container.clientWidth - best.clientWidth)/2;
+    container.scrollTo({ left: targetLeft, behavior:'smooth' });
+  }
+
+  function throttle(fn, wait){
+    let last = 0;
+    return (...args) => {
+      const now = Date.now();
+      if(now - last > wait){ last = now; fn(...args); }
+    };
+  }
+
+  document.addEventListener('click', (ev)=>{
+    const d = ev.target.closest('.lb-dot');
+    if(!d) return;
+    const idx = Number(d.dataset.idx);
+    const thumbs = getLbThumbs();
+    if(!thumbs) return;
+    const slide = thumbs.querySelector(`.lb-slide[data-idx="${idx}"]`);
+    if(!slide) return;
+    const targetLeft = slide.offsetLeft - (thumbs.clientWidth - slide.clientWidth)/2;
+    thumbs.scrollTo({ left: targetLeft, behavior:'smooth' });
+  });
+
+  document.addEventListener('keydown', (e)=>{
+    const modal = getLbModal();
+    if(!modal || !modal.classList.contains('open')) return;
+    const thumbs = getLbThumbs();
+    const indicator = getLbIndicator();
+    if(e.key === 'Escape') { closeLightbox(); return; }
+    if(e.key === 'ArrowRight'){
+      const cur = Number(indicator.querySelector('.lb-dot.active')?.dataset.idx || 0);
+      const slides = thumbs.querySelectorAll('.lb-slide');
+      const next = Math.min(slides.length-1, cur+1);
+      const slide = thumbs.querySelector(`.lb-slide[data-idx="${next}"]`);
+      if(slide) thumbs.scrollTo({ left: slide.offsetLeft - (thumbs.clientWidth - slide.clientWidth)/2, behavior:'smooth' });
+    }
+    if(e.key === 'ArrowLeft'){
+      const cur = Number(indicator.querySelector('.lb-dot.active')?.dataset.idx || 0);
+      const prev = Math.max(0, cur-1);
+      const slide = thumbs.querySelector(`.lb-slide[data-idx="${prev}"]`);
+      if(slide) thumbs.scrollTo({ left: slide.offsetLeft - (thumbs.clientWidth - slide.clientWidth)/2, behavior:'smooth' });
+    }
+  });
+
+  document.addEventListener('click', (ev)=>{
+    if(ev.target.id === 'lightboxModal') closeLightbox();
+    if(ev.target.id === 'lbClose') closeLightbox();
+  });
 
 
   
