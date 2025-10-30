@@ -35,7 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ======== Data ========
   const CATEGORIES = ['Tudo', 'Tênis', 'Calças', 'Blusas', 'Camisas', 'Verão', 'Inverno'];
   const PRODUCTS = [
-    {id:'p1', title:'Tênis Casual Branco', price:.0, cat:'Tênis'},
+    {id:'p1', title:'Tênis Casual Branco', price:.01, cat:'Tênis'},
     {id:'p2', title:'Calça Jeans Slim', price:159.90, cat:'Calças'},
     {id:'p3', title:'Blusa Feminina Cropped', price:89.90, cat:'Blusas'},
     {id:'p4', title:'Camisa Polo Masculina', price:119.90, cat:'Camisas'},
