@@ -157,198 +157,45 @@ document.addEventListener("DOMContentLoaded", () => {
   function closeDrawer(){ if(drawer) drawer.classList.remove('open'); }
 
   // ======== Checkout - abre somente o Mercado Pago ========
-  // quando redireciona de volta do Mercado Pago
-function handleMpRedirect() {
-  const params = new URLSearchParams(window.location.search);
-  const mp = params.get('mp_result');
-  const order = params.get('order');
-  if (mp === 'success') {
-    // mostra toast curto
-    toast('Compra concluída');
+  async function checkoutFlowCreateOrder() {
+    try {
+      const items = cartItems();
+      if (!items.length) return toast("Carrinho vazio");
 
-    // Abre/mostra botão flutuante Minhas compras
-    showFloatingOrdersButton();
+      const email = "cliente@teste.com";
+      const payload = {
+        orderId: "LV-" + Date.now(),
+        items: items.map(i => ({
+          id: i.id,
+          title: i.title,
+          price: i.price,
+          qty: i.qty || 1
+        })),
+        payer: { email },
+        back_urls: {
+          success: window.location.origin + "?mp_result=success",
+          failure: window.location.origin + "?mp_result=failure",
+          pending: window.location.origin + "?mp_result=pending",
+        },
+      };
 
-    // opcional: abrir panel de minhas compras automaticamente
-    setTimeout(() => {
-      openOrdersPanel(); // função que cria painel lendo Firestore (implementada abaixo)
-    }, 800);
-  } else if (mp === 'failure') {
-    toast('Pagamento não concluído');
-  } else if (mp === 'pending') {
-    toast('Pagamento pendente');
+      const resp = await fetch("/api/createPreference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Erro ao criar preferência");
+
+// 🔄 Redireciona direto na mesma aba (ideal para celular)
+      window.location.href = data.init_point;
+
+    } catch (err) {
+      console.error(err);
+      toast("Erro ao abrir pagamento Mercado Pago");
+    }
   }
-}
-
-// cria botão flutuante (apenas 1x)
-function showFloatingOrdersButton() {
-  if (document.querySelector('#floatingOrdersBtn')) return;
-  const btn = document.createElement('button');
-  btn.id = 'floatingOrdersBtn';
-  btn.innerHTML = 'Minhas compras';
-  btn.style.position = 'fixed';
-  btn.style.right = '18px';
-  btn.style.bottom = '18px';
-  btn.style.zIndex = 9999;
-  btn.style.padding = '12px 18px';
-  btn.style.borderRadius = '999px';
-  btn.style.background = 'linear-gradient(90deg,#7c3aed,#3b82f6)';
-  btn.style.color = '#fff';
-  btn.style.border = 'none';
-  btn.style.boxShadow = '0 8px 30px rgba(0,0,0,.5)';
-  btn.style.cursor = 'pointer';
-  document.body.appendChild(btn);
-  btn.addEventListener('click', openOrdersPanel);
-
-  // também cria botão de chat flutuante pequeno
-  if (!document.querySelector('#floatingChatBtn')) {
-    const cbtn = document.createElement('button');
-    cbtn.id = 'floatingChatBtn';
-    cbtn.innerHTML = 'Chat';
-    cbtn.style.position = 'fixed';
-    cbtn.style.left = '18px';
-    cbtn.style.bottom = '18px';
-    cbtn.style.zIndex = 9999;
-    cbtn.style.padding = '10px 12px';
-    cbtn.style.borderRadius = '999px';
-    cbtn.style.background = '#111827';
-    cbtn.style.color = '#fff';
-    cbtn.style.border = '1px solid rgba(255,255,255,.06)';
-    document.body.appendChild(cbtn);
-    cbtn.addEventListener('click', openGlobalChatPanel);
-  }
-}
-
-// painel de pedidos do usuário (lê Firestore pedidos onde userId == auth.currentUser.uid)
-function openOrdersPanel() {
-  if (!firebase || !firebase.auth || !firebase.firestore) { toast('Firestore não disponível'); return; }
-  const user = firebase.auth().currentUser;
-  if (!user) { toast('Autentique-se'); return; }
-
-  if (document.querySelector('#ordersPanel')) {
-    document.querySelector('#ordersPanel').style.display = 'block';
-    return;
-  }
-
-  const panel = document.createElement('div');
-  panel.id = 'ordersPanel';
-  panel.style.position = 'fixed';
-  panel.style.right = '12px';
-  panel.style.bottom = '80px';
-  panel.style.width = '360px';
-  panel.style.maxHeight = '60vh';
-  panel.style.overflow = 'auto';
-  panel.style.background = '#0f172a';
-  panel.style.border = '1px solid rgba(255,255,255,.06)';
-  panel.style.zIndex = 99999;
-  panel.style.borderRadius = '12px';
-  panel.style.padding = '10px';
-  panel.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;">
-    <strong>Minhas compras</strong>
-    <button id="closeOrdersPanel" class="close-x">Fechar</button>
-  </div><div id="ordersListPanel" style="margin-top:8px"></div>`;
-  document.body.appendChild(panel);
-  document.querySelector('#closeOrdersPanel').addEventListener('click', ()=> panel.remove());
-
-  const listEl = document.querySelector('#ordersListPanel');
-  const q = firebase.firestore().collection('orders').where('userId','==', user.uid).orderBy('createdAt','desc');
-  q.onSnapshot(snap => {
-    listEl.innerHTML = snap.docs.map(d => {
-      const o = d.data();
-      const status = o.status || 'pending';
-      const total = (o.total || 0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
-      return `<div style="padding:10px;border-bottom:1px solid rgba(255,255,255,.04)">
-        <div style="font-weight:700">${o.items?.map(i=>i.title).join(', ')}</div>
-        <div style="font-size:13px;color:#b9c4d9">${total} • ${status}</div>
-        <div style="margin-top:6px"><button data-order="${d.id}" class="openOrderBtn">Abrir</button></div>
-      </div>`;
-    }).join('');
-    // attach open order handlers
-    document.querySelectorAll('.openOrderBtn').forEach(btn => {
-      btn.onclick = () => openOrderDetail(btn.dataset.order);
-    });
-  });
-}
-
-function openOrderDetail(orderId) {
-  // abre modal com detalhes e chat simples
-  const existing = document.querySelector('#orderDetailPanel');
-  if (existing) existing.remove();
-
-  const panel = document.createElement('div');
-  panel.id = 'orderDetailPanel';
-  panel.style.position = 'fixed';
-  panel.style.left = '50%';
-  panel.style.top = '50%';
-  panel.style.transform = 'translate(-50%,-50%)';
-  panel.style.width = '520px';
-  panel.style.maxWidth = '95vw';
-  panel.style.maxHeight = '80vh';
-  panel.style.background = '#0f172a';
-  panel.style.border = '1px solid rgba(255,255,255,.06)';
-  panel.style.borderRadius = '10px';
-  panel.style.zIndex = 999999;
-  panel.style.padding = '14px';
-  panel.innerHTML = `<div style="display:flex;justify-content:space-between;">
-    <strong>Pedido ${orderId}</strong>
-    <button id="closeOrderDetail" class="close-x">Fechar</button>
-  </div>
-  <div id="orderDetailContent" style="margin-top:8px;height:60vh; overflow:auto"></div>
-  <div style="margin-top:8px;display:flex;gap:8px">
-    <input id="chatInput" placeholder="Mensagem para vendedor..." style="flex:1;padding:8px;border-radius:8px;background:var(--glass);border:1px solid rgba(255,255,255,.06)">
-    <button id="sendChatBtn" class="btn">Enviar</button>
-  </div>`;
-  document.body.appendChild(panel);
-  document.querySelector('#closeOrderDetail').onclick = () => panel.remove();
-
-  const detail = document.querySelector('#orderDetailContent');
-
-  // listen order doc + chat subcollection
-  const docRef = firebase.firestore().collection('orders').doc(orderId);
-  docRef.onSnapshot(snap => {
-    const data = snap.data();
-    const itemsHtml = (data.items || []).map(it=>`<div>${it.title} x${it.qty}</div>`).join('');
-    detail.innerHTML = `<div>${itemsHtml}</div><div style="margin-top:8px">Status: <strong>${data.status}</strong></div>
-      <hr /><div id="chatMessages" style="max-height:40vh;overflow:auto"></div>`;
-  });
-
-  // chat subscription
-  const chatRef = firebase.firestore().collection('orders').doc(orderId).collection('chat').orderBy('createdAt','asc');
-  const unsubChat = chatRef.onSnapshot(snap => {
-    const html = snap.docs.map(d => {
-      const m = d.data(); return `<div style="padding:6px;border-radius:8px;margin-bottom:6px;background:${m.from==='admin'?'#111827':'#1f2937'};">
-        <div style="font-size:13px;color:#fff">${m.text}</div>
-        <div style="font-size:11px;color:#b9c4d9">${new Date(m.createdAt?.toDate?.()||Date.now()).toLocaleString()}</div>
-      </div>`;
-    }).join('');
-    const cm = document.querySelector('#chatMessages');
-    if(cm) cm.innerHTML = html;
-  });
-
-  document.querySelector('#sendChatBtn').onclick = async () => {
-    const text = document.querySelector('#chatInput').value.trim();
-    if(!text) return;
-    await firebase.firestore().collection('orders').doc(orderId).collection('chat').add({
-      text,
-      from: 'user',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    document.querySelector('#chatInput').value = '';
-  };
-}
-
-// placeholder global chat panel
-function openGlobalChatPanel() {
-  // pode abrir um chat geral ou direcionar pro atendimento; vou abrir um link do WhatsApp web com mensagem padrão
-  const wa = `https://wa.me/${process.env?.OWNER_WA_NUMBER || '5549997124880'}?text=Ol%C3%A1%2C%20preciso%20de%20suporte%20sobre%20minha%20compra`;
-  window.open(wa, '_blank');
-}
-
-// no load: detecta redirect mp_result
-document.addEventListener('DOMContentLoaded', () => {
-  handleMpRedirect();
-});
-
 
 
   // ======== Lightbox / Galeria ========
