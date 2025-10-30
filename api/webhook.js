@@ -1,102 +1,103 @@
-// webhook.js
-const axios = require("axios");
-const admin = require("firebase-admin");
+// api/webhook.js
+const axios = require('axios');
+const admin = require('firebase-admin');
 
-// Init Firebase Admin
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault()
-  });
+  admin.initializeApp({ credential: admin.credential.applicationDefault() });
 }
 const db = admin.firestore();
 
 module.exports = async (req, res) => {
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    console.log("Webhook recebido:", JSON.stringify(body).slice(0,2000));
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    console.log('MP webhook:', body);
 
-    const action = body.action || body.type || "";
-    let paymentId = null;
-    if (body.data && body.data.id) paymentId = body.data.id;
-    if (body.id && !paymentId) paymentId = body.id;
+    // pega id do pagamento
+    let paymentId = body.data?.id || body.id || null;
+    const topic = body.type || body.action || body.topic || '';
 
-    if (!action.includes("payment") && body.topic !== "payment") {
-      console.log("Ignorado: não é pagamento");
-      return res.status(200).send("Ignorado");
+    if (!String(topic).includes('payment') && body.topic !== 'payment') {
+      return res.status(200).send('ignored');
+    }
+    if (!paymentId) {
+      console.warn('no payment id');
+      return res.status(200).send('no payment id');
     }
 
     const MP_ACCESS = process.env.MP_ACCESS_TOKEN;
-    if (!MP_ACCESS) {
-      console.error("Falta MP_ACCESS_TOKEN nas env vars");
-      return res.status(500).send("Falta MP_ACCESS_TOKEN");
-    }
+    if (!MP_ACCESS) return res.status(500).send('no mp token');
 
-    // busca dados do pagamento
-    let paymentData = null;
+    // busca pagamento
+    let pay;
     try {
       const r = await axios.get(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
         headers: { Authorization: `Bearer ${MP_ACCESS}` }
       });
-      paymentData = r.data;
+      pay = r.data;
     } catch (err) {
-      console.error("Erro buscando pagamento:", err.response?.data || err.message);
-      // não falha 500 para o Mercado Pago — apenas log e responde 200 (p/ evitar retries)
-      return res.status(200).send("Erro ao buscar pagamento, log gravado");
+      console.error('mp get payment error', err.response?.data || err.message);
+      return res.status(200).send('mp fetch error');
     }
 
-    const status = paymentData?.status || "unknown";
-    const payerEmail = paymentData?.payer?.email || "-";
-    const payerName = (paymentData?.payer?.first_name || "") + " " + (paymentData?.payer?.last_name || "");
-    const payerPhone = paymentData?.payer?.phone?.number || "-";
-    const transactionAmount = paymentData?.transaction_amount || paymentData?.transaction_amount || 0;
-    const description = paymentData?.description || paymentData?.statement_descriptor || "Pedido";
-    const orderRef = paymentData?.external_reference || paymentData?.order?.id || paymentId;
+    // extrai dados
+    const status = pay.status; // approved, pending, cancelled...
+    const externalRef = pay.external_reference || `mp-${paymentId}`;
+    const amount = pay.transaction_amount || pay.total_amount || 0;
+    const payerEmail = pay.payer?.email || '-';
+    const payerName = `${pay.payer?.first_name || ''} ${pay.payer?.last_name || ''}`.trim();
+    const payerPhone = pay.payer?.phone?.number || '-';
+    const items = pay.additional_info?.items || pay.order?.items || [];
 
-    console.log(`Pagamento ${paymentId} status=${status} orderRef=${orderRef}`);
+    // Salva ou atualiza pedido
+    const docRef = db.collection('pedidos').doc(String(externalRef));
+    await docRef.set({
+      orderId: String(externalRef),
+      status,
+      valor: amount,
+      email: payerEmail,
+      telefone: payerPhone,
+      clienteNome: payerName,
+      items,
+      pagoEm: status === 'approved' ? admin.firestore.FieldValue.serverTimestamp() : null,
+      raw: pay
+    }, { merge: true });
 
-    // atualiza Firestore (merge)
-    if (orderRef) {
-      await db.collection("pedidos").doc(String(orderRef)).set({
-        status,
-        pagoEm: admin.firestore.FieldValue.serverTimestamp(),
-        valor: transactionAmount,
-        email: payerEmail,
-        telefone: payerPhone,
-        raw_payment: paymentData
-      }, { merge: true });
-    }
+    // Cria mensagem automática no chat
+    const chatRef = db.collection('chats').doc(String(externalRef));
+    const msgRef = chatRef.collection('messages').doc();
+    await msgRef.set({
+      from: 'system',
+      text: `Pagamento recebido: status=${status}, valor=${amount}`,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
 
-    // envia mensagem Telegram se aprovado
+    // Notifica no Telegram se aprovado
     const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-    const TG_CHAT = process.env.TELEGRAM_CHAT_ID;
-
-    if (TG_TOKEN && TG_CHAT && (status === "approved" || status === "paid" || status === "authorized")) {
-      const msg = [
-        "✅ Nova compra aprovada!",
-        `🧾 Pedido: ${orderRef}`,
-        `📦 Produto: ${description}`,
-        `💰 Valor: R$ ${transactionAmount}`,
-        `👤 Cliente: ${payerName} (${payerEmail})`,
-        `📞 Telefone: ${payerPhone}`,
-        `Ver: https://loja-vr-sul.vercel.app/admin/vendas`
-      ].join("\n");
+    const TG_CHAT = process.env.TELEGRAM_ADMIN_CHAT_ID;
+    if (TG_TOKEN && TG_CHAT && status === 'approved') {
+      const text = [
+        '✅ *Nova compra aprovada*',
+        `Pedido: ${externalRef}`,
+        `Valor: R$ ${amount}`,
+        `Cliente: ${payerName} (${payerEmail})`,
+        `Telefone: ${payerPhone}`,
+        `Ver pedido: ${process.env.PUBLIC_URL}/admin/vendas`
+      ].join('\n');
 
       try {
         await axios.post(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
           chat_id: TG_CHAT,
-          text: msg
-        }, { timeout: 8000 });
-        console.log("Mensagem Telegram enviada");
-      } catch (err) {
-        console.error("Falha ao enviar Telegram:", err.response?.data || err.message);
+          text,
+          parse_mode: 'Markdown'
+        });
+      } catch (e) {
+        console.error('telegram send error', e.response?.data || e.message);
       }
-    } else {
-      console.log("Telegram não configurado ou status não é aprovado:", { TG_TOKEN: !!TG_TOKEN, TG_CHAT: !!TG_CHAT, status });
     }
 
-    return res.status(200).send("OK");
+    return res.status(200).send('ok');
   } catch (err) {
-    console.error("Erro geral webhook:", err);
-    return res.status(500).send("Erro interno");
+    console.error('webhook error', err);
+    return res.status(500).send('error');
   }
 };
