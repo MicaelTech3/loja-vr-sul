@@ -188,8 +188,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || "Erro ao criar preferência");
 
-      window.open(data.init_point, "_blank"); // só abre o checkout Mercado Pago
-      toast("Checkout Mercado Pago aberto!");
+// 🔄 Redireciona direto na mesma aba (ideal para celular)
+      window.location.href = data.init_point;
+
     } catch (err) {
       console.error(err);
       toast("Erro ao abrir pagamento Mercado Pago");
