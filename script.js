@@ -197,6 +197,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+
+
+
+  
   // ======== Eventos Globais ========
   document.addEventListener('click', (ev)=>{
     const target = ev.target;
