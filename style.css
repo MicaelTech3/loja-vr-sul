@@ -157,16 +157,43 @@ button{font:inherit}
 .lb-dot.active {
   background: #fff;
 }
-.close-btn {
+/* Botão "×" padrão (mobile) */
+.close-btn { 
   position: absolute;
-  top: 20px;
-  right: 30px;
-  color: white;
-  font-size: 24px;
-  background: none;
+  top: 210px;
+  right: 20px;
+  color: rgb(196, 179, 179);
+  font-size: 26px;
+  background: transparent;
   border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
 }
+.close-btn:hover {
+  background: rgba(255,255,255,0.25);
+  transform: scale(1.08);
+}
+
+/* 💻 Ajuste para telas grandes (PC) */
+@media (min-width: 768px) {
+  .close-btn {
+    top: 300px;         /* bem perto da imagem */
+    right: 975px;
+    font-size: 22px;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .close-btn:hover {
+    background: rgba(255,255,255,0.15);
+    transform: scale(1.1);
+  }
+}
+
 
 
 /* heart wished style */

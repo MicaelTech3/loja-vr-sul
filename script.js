@@ -372,6 +372,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if(ev.target.id === 'lbClose') closeLightbox();
   });
 
+// ======== Ação de clique nas imagens dos produtos ========
+document.addEventListener("click", (ev) => {
+  const thumb = ev.target.closest(".thumb img");
+  if (thumb) {
+    const card = thumb.closest(".card");
+    if (card) openLightbox(card.dataset.id);
+  }
+});
 
   
   // ======== Eventos Globais ========
