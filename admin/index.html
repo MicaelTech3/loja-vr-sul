@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin — Gerenciar imagens</title>
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Admin — Gerenciar imagens de produtos</h1>
+      <div class="login">
+        <input id="adminPass" type="password" placeholder="Senha admin">
+        <button id="btnLogin">Entrar</button>
+        <span id="loginMsg" class="muted"></span>
+      </div>
+    </header>
+
+    <main id="main" class="hidden">
+      <div id="productsGrid" class="grid"></div>
+    </main>
+
+    <div id="uploaderModal" class="modal hidden">
+      <div class="modal-card">
+        <h3>Subir imagem</h3>
+        <div id="previewWrap"></div>
+        <input id="fileInput" type="file" accept="image/*" />
+        <div class="row">
+          <button id="btnUpload" class="primary">Subir e Salvar</button>
+          <button id="btnCancel">Cancelar</button>
+        </div>
+        <div id="uploadStatus" class="muted"></div>
+      </div>
+    </div>
+
+    <footer>
+      <small>Loja VR Sul — Admin imagens</small>
+    </footer>
+  </div>
+
+  <!-- Firebase compat client SDK (já usado no site) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+  <script src="admin.js"></script>
+</body>
+</html>
